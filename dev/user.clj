@@ -4,10 +4,9 @@
             [saml20-clj.xml :as xml]
             [web]
             [clojure.edn :as edn]
-            [clojure.pprint :refer (pprint)]
+            [clojure.pprint :refer [pprint]]
             [clojure.repl :refer :all]
-            [clojure.test :refer :all]
-            [clojure.tools.namespace.repl :refer (refresh refresh-all)]))
+            [clojure.tools.namespace.repl :refer [refresh refresh-all]]))
 
 (def app-state (atom nil))
 
