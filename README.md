@@ -4,6 +4,8 @@ This is a SAML 2.0 clojure library for SSO.
 This library allows a clojure application to act as a service provider (SP).
 Tested with Microsoft Active Directory Federation Server (ADFS) as the identity provider (IdP).
 
+[![Clojars Project](https://img.shields.io/clojars/v/k2n/saml20-clj.svg)](https://clojars.org/k2n/saml20-clj)
+
 ## Installation
 
 Add ```[k2n/saml20-clj "0.1.9"]``` to your project dependencies.
