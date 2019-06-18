@@ -8,7 +8,7 @@
 
   :aliases
   {"test"                      ["with-profile" "+expectations" "expectations"]
-   "bikeshed"                  ["with-profile" "+bikeshed" "bikeshed" "--max-line-length" "120"]
+   "bikeshed"                  ["with-profile" "+bikeshed" "bikeshed" "--max-line-length" "150"]
    "check-namespace-decls"     ["with-profile" "+check-namespace-decls" "check-namespace-decls"]
    "eastwood"                  ["with-profile" "+eastwood" "eastwood"]
    "check-reflection-warnings" ["with-profile" "+reflection-warnings" "check"]

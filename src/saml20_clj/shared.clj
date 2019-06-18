@@ -11,13 +11,12 @@
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream]
            java.nio.charset.Charset
            [java.security KeyStore PublicKey]
-           [java.security.cert Certificate CertificateFactory]
+           [java.security.cert Certificate CertificateFactory X509Certificate]
            java.util.Random
            [java.util.zip Deflater DeflaterOutputStream Inflater InflaterInputStream]
            javax.crypto.Mac
            javax.crypto.spec.SecretKeySpec
            org.apache.commons.codec.binary.Base64
-           java.security.cert.X509Certificate
            org.apache.commons.io.IOUtils))
 
 (def instant-format (ctimeformat/formatters :date-time-no-ms))

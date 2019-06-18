@@ -106,7 +106,7 @@
   (let [decrypter (saml-sp/make-saml-decrypter keystore-file keystore-password key-alias)
         cert      (saml-shared/get-certificate-b64  keystore-file keystore-password key-alias)
         mutables  (assoc (saml-sp/generate-mutables)
-                         :xml-signer (saml-sp/make-saml-signer keystore-file keystore-password key-alias))
+                    :xml-signer (saml-sp/make-saml-signer keystore-file keystore-password key-alias))
 
         acs-uri           (str base-uri "/saml")
         saml-req-factory! (saml-sp/create-request-factory mutables
@@ -121,65 +121,72 @@
                            :timeout-pruner-fn! prune-fn!
                            :certificate-x509   cert}]
     (cc/routes
-     (cc/GET "/saml/meta" [] {:status  200
-                              :headers {"Content-type" "text/xml"}
-                              :body    (saml-sp/metadata app-name acs-uri cert) } )
-      (cc/GET "/saml" [:as req]
-              ;;; Update this to actually do something. :|
-              )
-      (cc/POST "/saml" {params :params session :session}
-               (let [xml-response                      (saml-shared/base64->inflate->str (:SAMLResponse params))
-                     relay-state                       (:RelayState params)
-                     [valid-relay-state? continue-url] (valid-hmac-relay-state? (:secret-key-spec mutables) relay-state)
-                     saml-resp                         (saml-sp/xml-string->saml-resp xml-response)
-                     valid-signature?                  (if idp-cert
-                                                         (saml-sp/validate-saml-response-signature saml-resp idp-cert)
-                                                         true)
-                     valid?                            (and valid-relay-state? valid-signature?)
-                     saml-info                         (when valid? (saml-sp/saml-resp->assertions saml-resp decrypter) )]
-              ;;(prn saml-info)
-              (if valid?
-                {:status  303 ;; See other
-                 :headers {"Location" continue-url}
-                 :session (assoc session :saml saml-info)
-                 :body    ""}
-                {:status 500
-                 :body   "The SAML response from IdP does not validate!"}))))))
+     (cc/GET
+      "/saml/meta"
+      []
+      {:status  200
+       :headers {"Content-type" "text/xml"}
+       :body    (saml-sp/metadata app-name acs-uri cert)})
+
+     ;; Update this to actually do something. :|
+     (cc/GET
+      "/saml"
+      [:as req])
+
+     (cc/POST
+      "/saml"
+      {params :params session :session}
+      (let [xml-response                      (saml-shared/base64->inflate->str (:SAMLResponse params))
+            relay-state                       (:RelayState params)
+            [valid-relay-state? continue-url] (valid-hmac-relay-state? (:secret-key-spec mutables) relay-state)
+            saml-resp                         (saml-sp/xml-string->saml-resp xml-response)
+            valid-signature?                  (if idp-cert
+                                                (saml-sp/validate-saml-response-signature saml-resp idp-cert)
+                                                true)
+            valid?                            (and valid-relay-state? valid-signature?)
+            saml-info                         (when valid? (saml-sp/saml-resp->assertions saml-resp decrypter))]
+        (if valid?
+          {:status  303 ; See other
+           :headers {"Location" continue-url}
+           :session (assoc session :saml saml-info)
+           :body    ""}
+          {:status 500
+           :body   "The SAML response from IdP does not validate!"}))))))
 
 (defn saml-wrapper
   [handler
    {:keys [base-uri app-name idp-uri idp-cert keystore-file keystore-password key-alias] :as saml20-config}
    mutables]
   (let [new-mutables (assoc
-                      mutables
-                      :xml-signer
-                      (saml-sp/make-saml-signer
-                       keystore-file keystore-password key-alias))]
-  (fn saml-wrapper-fn
-    [request]
-    (let [acs-uri (str base-uri
-                       (helm.uri/assemble
-                        (:path
-                         (helm.nav/get-route-by-id
-                          request :saml20-clj/endpoint))))]
-      (handler
-        (assoc
-          request :saml20
-          (assoc
-            saml20-config
-            :decrypter
-            (saml-sp/make-saml-decrypter
-              keystore-file keystore-password key-alias)
-            :cert
-            (saml-shared/get-certificate-b64
-              keystore-file keystore-password key-alias)
-            :mutables new-mutables
-            :acs-uri acs-uri
-            :saml20-req-factory! (saml-sp/create-request-factory
-                                   new-mutables idp-uri saml-format
-                                   app-name acs-uri)
-            :prune-fn! (partial saml-sp/prune-timed-out-ids!
-                                (:saml-id-timeouts mutables)))))))))
+                         mutables
+                         :xml-signer
+                         (saml-sp/make-saml-signer
+                          keystore-file keystore-password key-alias))]
+    (fn saml-wrapper-fn
+      [request]
+      (let [acs-uri (str base-uri
+                         (helm.uri/assemble
+                          (:path
+                           (helm.nav/get-route-by-id
+                            request :saml20-clj/endpoint))))]
+        (handler
+         (assoc
+             request :saml20
+             (assoc
+                 saml20-config
+                 :decrypter
+                 (saml-sp/make-saml-decrypter
+                  keystore-file keystore-password key-alias)
+                 :cert
+                 (saml-shared/get-certificate-b64
+                  keystore-file keystore-password key-alias)
+                 :mutables new-mutables
+                 :acs-uri acs-uri
+                 :saml20-req-factory! (saml-sp/create-request-factory
+                                       new-mutables idp-uri saml-format
+                                       app-name acs-uri)
+                 :prune-fn! (partial saml-sp/prune-timed-out-ids!
+                                     (:saml-id-timeouts mutables)))))))))
 
 (defn helmsman-routes
   [saml20-config]
