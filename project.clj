@@ -1,10 +1,10 @@
-(defproject metabase/saml20-clj "1.0.0-SNAPSHOT"
+(defproject metabase/saml20-clj "1.0.0"
   :description "Improved SAML 2.0 library for SSO."
   :url "https://github.com/metabase/saml20-clj"
   :min-lein-version "2.5.0"
 
   :license {:name "Eclipse Public License"
-            :url "https://raw.githubusercontent.com/metabase/saml20-clj/master/LICENSE"}
+            :url  "https://raw.githubusercontent.com/metabase/saml20-clj/master/LICENSE"}
 
   :aliases
   {"test"                      ["with-profile" "+expectations" "expectations"]
