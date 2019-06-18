@@ -18,13 +18,13 @@
   :dependencies
   [[org.clojure/data.xml "0.0.8"]
    [org.clojure/data.zip "0.1.3"]
-   [org.clojure/tools.logging "0.4.1"]
+   [org.clojure/tools.logging "0.5.0-alpha.1"]
    [clj-time "0.15.1"]
    [compojure "1.6.1"]
    [hiccup "1.0.5"]
    [org.apache.santuario/xmlsec "2.1.3"]
    [org.opensaml/opensaml "2.6.4"]
-   [org.vlacs/helmsman "1.0.0-alpha5"]
+   [org.vlacs/helmsman "1.0.0"]
    [ring "1.7.1"]]
 
   :profiles
