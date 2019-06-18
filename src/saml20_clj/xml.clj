@@ -1,15 +1,11 @@
 (ns saml20-clj.xml
-  (:require [hiccup.core]
-            [hiccup.page]
+  (:require [hiccup core page]
             [saml20-clj.shared :as saml-shared])
-  (:import [javax.xml.crypto KeySelector]
-           [javax.xml.crypto.dsig XMLSignature XMLSignatureFactory]
-           [javax.xml.crypto.dsig.dom DOMValidateContext]
-           [java.io ByteArrayInputStream]
-           [javax.xml.parsers DocumentBuilderFactory]
-           [org.w3c.dom Document]
-           [org.w3c.dom NodeList]
-           [org.apache.xml.security.c14n Canonicalizer]))
+  (:import [javax.xml.crypto.dsig XMLSignature XMLSignatureFactory]
+           javax.xml.crypto.dsig.dom.DOMValidateContext
+           javax.xml.crypto.KeySelector
+           javax.xml.parsers.DocumentBuilderFactory
+           org.apache.xml.security.c14n.Canonicalizer))
 
 (defn make-xml-string
   "Creates an XML string using hiccup."

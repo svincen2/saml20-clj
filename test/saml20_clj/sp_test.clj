@@ -1,30 +1,31 @@
 (ns saml20-clj.sp-test
-  (:require [clojure.test :refer :all]
+  (:require [expectations :refer [expect]]
             [clj-time.core :as ctime]
-            [saml20-clj.sp :refer :all]))
+            [saml20-clj.sp :as sp]))
 
-(deftest test-saml-next-id
-  (testing "Changing saml last id state."
-    (let [mutable (atom 0)
-          ival @mutable]
-      (is (= (inc ival) (next-saml-id! mutable))))))
+;; test saml next-id: Changing saml last id state.
+(expect
+ 1
+ (sp/next-saml-id! (atom 0)))
 
 
-(deftest test-saml-timeout-bump
-  (testing "Attempt to bump a stateful saml timeout on a fake request."
-    (let [mutable (ref {})
-          saml-id 12345
-          time-now (ctime/now)]
-      (bump-saml-id-timeout! mutable saml-id time-now)
-      (is (= (get @mutable saml-id) time-now)))))
+;; test saml timeout-bump: Attempt to bump a stateful saml timeout on a fake request.
+(let [time-now (ctime/now)]
+  (expect
+   time-now
+   (let [mutable  (ref {})
+         saml-id  12345]
+     (sp/bump-saml-id-timeout! mutable saml-id time-now)
+     (get @mutable saml-id))))
 
-(deftest test-prune-timed-out-ids
-  (testing "Attempt to remove a stale record from a mutable hash."
-    (let [mutable (ref {1 (ctime/date-time 2013 10 10)
-                        2 (ctime/now)})
-          timeout (ctime/minutes 10)]
-      (prune-timed-out-ids! mutable timeout)
-      (is (= (count @mutable) 1))
-      (is (= (get @mutable 1) nil))
-      (is (not= (get @mutable 2) nil)))))
 
+;; test prune timed out ids: Attempt to remove a stale record from a mutable hash.
+(expect
+ {:count 1, :get-1? false, :get-2? true}
+ (let [mutable (ref {1 (ctime/date-time 2013 10 10)
+                     2 (ctime/now)})
+       timeout (ctime/minutes 10)]
+   (sp/prune-timed-out-ids! mutable timeout)
+   {:count  (count @mutable)
+    :get-1? (some? (get @mutable 1))
+    :get-2? (some? (get @mutable 2))}))
