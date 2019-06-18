@@ -1,6 +1,6 @@
 (ns saml20-clj.sp-test
-  (:require [expectations :refer [expect]]
-            [clj-time.core :as ctime]
+  (:require [clj-time.core :as ctime]
+            [expectations :refer [expect]]
             [saml20-clj.sp :as sp]))
 
 ;; test saml next-id: Changing saml last id state.

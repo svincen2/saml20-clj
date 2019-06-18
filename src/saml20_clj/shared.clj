@@ -104,13 +104,13 @@
   [^String string]
   (-> string str->bytes Base64/decodeBase64 byte-inflate bytes->str))
 
-(defn ^bytes random-bytes
-  ([size]
+(defn random-bytes
+  (^bytes [size]
    (let [ba (byte-array size)
          r (Random.)]
      (.nextBytes r ba)
      ba))
-  ([]
+  (^bytes []
    (random-bytes 20)))
 
 (def ^String bytes->hex

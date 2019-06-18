@@ -4,7 +4,8 @@
              [core :as ctime]]
             [clojure
              [string :as str]
-             [xml :refer [parse]]]
+             [xml :refer [parse]]
+             [zip :as zip]]
             [clojure.data.zip.xml :as zf]
             [clojure.tools.logging :as log]
             [hiccup
@@ -178,7 +179,7 @@
   "Does everything from parsing the verifying saml data to returning it in an easy to use map."
   [raw-response]
   (let [xml           (parse (shared/str->inputstream raw-response))
-        parsed-zipper (clojure.zip/xml-zip xml)]
+        parsed-zipper (zip/xml-zip xml)]
     (response->map parsed-zipper)))
 
 
