@@ -18,6 +18,8 @@ Tested with Microsoft Active Directory Federation Server (ADFS) as the identity 
 *  See [quephird/saml-test](https://github.com/quephird/saml-test) for the usage.
 *  This repository is forked from [vlacs/saml20-clj](https://github.com/vlacs/saml20-clj), and adds:
   *  Tons of bug fixes, such as `saml20-clj.shared/base64->inflate->str` not actually calling `byte-inflate` at all
+  *  Fixed millions of reflection warnings
+  *  Removed duplicate functions
   *  Support for XML signing with SHA-256 instead of SHA-1, which is required by ADFS by default (via [k2n/saml20-clj](https://github.com/k2n/saml20-clj))
   *  Support for Clojure 1.10+
   *  Support for base-64 encodings that contain newlines

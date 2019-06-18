@@ -31,8 +31,29 @@
  (shared/parse-xml-str test-xml)
  test-xml-response)
 
+;; make sure conversion to/from base 64 works as expected
+(expect
+ "QUJDREVG"
+ (shared/str->base64 "ABCDEF"))
+
+(expect
+ "ABCDEF"
+ (shared/base64->str "QUJDREVG"))
+
+;; make sure conversion to/from base 64 w/ DEFLATE compression works as expected
+(expect
+ "c3RydnF1AwA="
+ (shared/str->deflate->base64 "ABCDEF"))
+
+(expect
+ "ABCDEF"
+ (shared/base64->inflate->str "c3RydnF1AwA="))
+
 ;; we should be able to decode base-64 stuff that contains newlines in it
-(defn- x []
-  (let [saml-response ""]
-    (shared/base64->inflate->str saml-response)))
-#_(codecs/bytes->str (codec/base64-decode s))
+(expect
+ "ABCDEF"
+ (shared/base64->inflate->str "c3Ry\ndnF1\r\nAwA="))
+
+(expect
+ "ABCDEF"
+ (shared/base64->str "QUJDR\nEV\r\nG"))

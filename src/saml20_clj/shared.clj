@@ -2,48 +2,45 @@
   (:require [clj-time
              [core :as ctime]
              [format :as ctimeformat]]
-            [clojure xml zip
-             [string :as str]]
+            [clojure
+             [string :as str]
+             [xml :as xml]
+             [zip :as zip]]
             [clojure.java.io :as io]
             [ring.util.codec :as codec :refer [form-encode]])
-  (:import [java.io BufferedReader ByteArrayInputStream InputStreamReader]))
+  (:import [java.io ByteArrayInputStream ByteArrayOutputStream]
+           java.nio.charset.Charset
+           [java.security KeyStore PublicKey]
+           [java.security.cert Certificate CertificateFactory]
+           java.util.Random
+           [java.util.zip Deflater DeflaterOutputStream Inflater InflaterInputStream]
+           javax.crypto.Mac
+           javax.crypto.spec.SecretKeySpec
+           org.apache.commons.codec.binary.Base64
+           org.apache.commons.io.IOUtils))
 
 (def instant-format (ctimeformat/formatters :date-time-no-ms))
-(def charset-format (java.nio.charset.Charset/forName "UTF-8"))
+(def ^Charset utf-charset (Charset/forName "UTF-8"))
 
 (def status-code-success "urn:oasis:names:tc:SAML:2.0:status:Success")
 
 (defn saml-successful?
   [id-str]
-  (if (= id-str status-code-success)
-    true false))
-
-(defn read-to-end
-  [stream]
-  (let [sb (StringBuilder.)]
-    (with-open [reader (-> stream
-                           InputStreamReader.
-                           BufferedReader.)]
-      (loop [c (.read reader)]
-        (if (neg? c)
-          (str sb)
-          (do
-            (.append sb (char c))
-            (recur (.read reader))))))))
+  (= id-str status-code-success))
 
 (defn jcert->public-key
   "Extracts a public key object from a java cert object."
-  [java-cert-obj]
-  (.getPublicKey java-cert-obj))
+  ^PublicKey [^Certificate certificate]
+  (.getPublicKey certificate))
 
 (defn parse-xml-str
-  [xml-str]
-  (clojure.zip/xml-zip (clojure.xml/parse (ByteArrayInputStream. (.getBytes xml-str)))))
+  [^String xml-str]
+  (zip/xml-zip (xml/parse (ByteArrayInputStream. (.getBytes xml-str)))))
 
 
 (defn clean-x509-filter
   "Turns a base64 string into a byte array to be decoded, which includes sanitization."
-  [x509-string]
+  ^bytes [^String x509-string]
   (-> x509-string
       (str/replace #"[\n ]" "")
       ((partial map byte))
@@ -52,22 +49,17 @@
 
 (defn certificate-x509
   "Takes in a raw X.509 certificate string, parses it, and creates a Java certificate."
-  [x509-string]
+  ^Certificate [^String x509-string]
   (let [x509-byte-array (clean-x509-filter x509-string)
-        fty (java.security.cert.CertificateFactory/getInstance "X.509")
-        bais (ByteArrayInputStream. (bytes (codec/base64-decode x509-byte-array)))]
-    (.generateCertificate fty bais)))
-
-(defn jcert->public-key
-  "Extracts a public key object from a java cert object."
-  [java-cert-obj]
-  (.getPublicKey java-cert-obj))
+        cert-factory    (CertificateFactory/getInstance "X.509")]
+    (with-open [is (ByteArrayInputStream. (bytes (Base64/encodeBase64 x509-byte-array)))]
+      (.generateCertificate cert-factory is))))
 
 
 (defn str->inputstream
   "Unravels a string into an input stream so we can work with Java constructs."
-  [unravel]
-  (ByteArrayInputStream. (.getBytes unravel charset-format)))
+  ^ByteArrayInputStream [^String unravel]
+  (ByteArrayInputStream. (.getBytes unravel utf-charset)))
 
 (defn make-issue-instant
   "Converts a date-time to a SAML 2.0 time string."
@@ -75,57 +67,52 @@
   (ctimeformat/unparse instant-format ii-date))
 
 (defn str->bytes
-  [some-string]
-  (.getBytes some-string charset-format))
+  ^bytes [^String some-string]
+  (.getBytes some-string utf-charset))
 
 (defn bytes->str
-  [some-bytes]
-  (String. some-bytes charset-format))
+  ^String [^bytes some-bytes]
+  (String. some-bytes utf-charset))
 
 (defn byte-deflate
-  [str-bytes]
-  (let [out (java.io.ByteArrayOutputStream.)
-        deflater (java.util.zip.DeflaterOutputStream.
-                   out
-                   (java.util.zip.Deflater. -1 true) 1024)]
-    (.write deflater str-bytes)
-    (.close deflater)
-    (.toByteArray out)))
+  ^bytes [^bytes str-bytes]
+  (with-open [byte-os     (ByteArrayOutputStream.)
+              deflater-os (DeflaterOutputStream. byte-os (Deflater. -1 true) 1024)]
+    (.write deflater-os str-bytes)
+    (.finish deflater-os)
+    (.toByteArray byte-os)))
 
 (defn byte-inflate
-  [comp-bytes]
-  (let [input (ByteArrayInputStream. comp-bytes)
-        inflater (java.util.zip.InflaterInputStream.
-                   input (java.util.zip.Inflater. true) 1024)
-        result (read-to-end inflater)]
-    (.close inflater)
-    result))
+  ^bytes [^bytes comp-bytes]
+  (with-open [is (InflaterInputStream. (ByteArrayInputStream. comp-bytes) (Inflater. true) 1024)]
+    (IOUtils/toByteArray is)))
 
 (defn str->base64
-  [base64able-string]
-  (-> base64able-string str->bytes codec/base64-encode bytes->str))
+  ^String [^String string]
+  (-> string str->bytes Base64/encodeBase64 bytes->str))
 
 (defn base64->str
-  [stringable-base64]
-  (-> stringable-base64 str->bytes codec/base64-decode bytes->str))
+  ^String [^String string]
+  (-> string str->bytes Base64/decodeBase64 bytes->str))
 
 (defn str->deflate->base64
-  [string]
-  (-> string str->bytes byte-deflate codec/base64-encode bytes->str))
+  [^String string]
+  (-> string str->bytes byte-deflate Base64/encodeBase64 bytes->str))
 
-(defn base64->inflate->str [string]
-  (-> string str->bytes codec/base64-decode bytes->str))
+(defn base64->inflate->str
+  [^String string]
+  (-> string str->bytes Base64/decodeBase64 byte-inflate bytes->str))
 
-(defn random-bytes
+(defn ^bytes random-bytes
   ([size]
    (let [ba (byte-array size)
-         r (new java.util.Random)]
+         r (Random.)]
      (.nextBytes r ba)
      ba) )
   ([]
    (random-bytes 20)))
 
-(def bytes->hex
+(def ^String bytes->hex
   (let [digits (into {} (map-indexed vector "0123456789ABCDEF") )]
     (fn [^bytes bytes-str]
       (let [ret (char-array (* 2 (alength bytes-str)))]
@@ -140,11 +127,12 @@
               (recur (unchecked-inc idx)))
             (String. ret)))))))
 
-(defn new-secret-key-spec []
-  (new javax.crypto.spec.SecretKeySpec (random-bytes) "HmacSHA1"))
+(defn new-secret-key-spec ^SecretKeySpec []
+  (SecretKeySpec. (random-bytes) "HmacSHA1"))
 
-(defn hmac-str [^javax.crypto.spec.SecretKeySpec key-spec, ^String string]
-  (let [mac (doto (javax.crypto.Mac/getInstance "HmacSHA1")
+(defn hmac-str
+  ^String [^SecretKeySpec key-spec, ^String string]
+  (let [mac (doto (Mac/getInstance "HmacSHA1")
               (.init key-spec))
         hs (.doFinal mac (.getBytes string "UTF-8"))]
     (bytes->hex hs)))
@@ -157,8 +145,8 @@
   [req]
   (into {}
         (map
-          (fn [[k v]] [k (str->base64 v)])
-          req)))
+         (fn [[k v]] [k (str->base64 v)])
+         req)))
 
 (defn saml-form-encode [form]
   (-> form
@@ -173,19 +161,20 @@
   "Creates a function for clojure.core/filter to keep all dates after
   a given date."
   [timespan]
-    (fn [i]
-      (ctime/after? (second i) (time-since timespan))))
+  (fn [i]
+    (ctime/after? (second i) (time-since timespan))))
 
-(defn load-key-store [keystore-filename keystore-password]
-  (when (and (not (nil? keystore-filename))
-             (.exists (io/as-file keystore-filename)))
-    (with-open [is (clojure.java.io/input-stream keystore-filename)]
-      (doto (java.security.KeyStore/getInstance "JKS")
+(defn load-key-store
+  ^KeyStore [keystore-filename, ^String keystore-password]
+  (when (some-> keystore-filename io/as-file .exists)
+    (with-open [is (io/input-stream keystore-filename)]
+      (doto (KeyStore/getInstance "JKS")
         (.load is (.toCharArray keystore-password))))))
 
-(defn get-certificate-b64 [keystore-filename keystore-password cert-alias]
+(defn get-certificate-b64
+  ^String [keystore-filename, ^String keystore-password, ^String cert-alias]
   (when-let [ks (load-key-store keystore-filename keystore-password)]
-    (-> ks (.getCertificate cert-alias) (.getEncoded) codec/base64-encode (String. "UTF-8"))))
+    (-> ks (.getCertificate cert-alias) (.getEncoded) Base64/decodeBase64 (String. "UTF-8"))))
 
 
 ;; https://www.purdue.edu/apps/account/docs/Shibboleth/Shibboleth_information.jsp
