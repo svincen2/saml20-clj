@@ -6,7 +6,8 @@
              [uri :as helm.uri]]
             [saml20-clj
              [shared :as saml-shared]
-             [sp :as saml-sp]]))
+             [sp :as saml-sp]])
+  (:import javax.crypto.spec.SecretKeySpec))
 
 (def saml-format "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect")
 
@@ -15,10 +16,11 @@
    :headers {"Location" (str "/saml?continue=" continue-to-url)}
    :body    ""})
 
-(defn create-hmac-relay-state [secret-key-spec relay-state]
+(defn create-hmac-relay-state
+  ^String [^SecretKeySpec secret-key-spec, ^String relay-state]
   (str relay-state ":" (saml-shared/hmac-str secret-key-spec relay-state)))
 
-(defn valid-hmac-relay-state? [secret-key-spec hmac-relay-state]
+(defn valid-hmac-relay-state? [^SecretKeySpec secret-key-spec, ^String hmac-relay-state]
   (let [idx (.lastIndexOf hmac-relay-state ":")
         [relay-state hmac] (if (pos? idx)
                              [(subs hmac-relay-state 0 idx) (subs hmac-relay-state (inc idx))]
@@ -29,9 +31,9 @@
 (defn meta-response
   [req]
   (let [{:keys [app-name acs-uri cert]} (:saml20 req)]
-    {:status 200
+    {:status  200
      :headers {"Content-type" "text/xml"}
-     :body (saml-sp/metadata app-name acs-uri cert)}))
+     :body    (saml-sp/metadata app-name acs-uri cert)}))
 
 (defn new-request-handler
   [req]

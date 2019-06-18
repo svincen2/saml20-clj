@@ -1,4 +1,4 @@
-(defproject metabase/saml20-clj "0.1.10-SNAPSHOT"
+(defproject metabase/saml20-clj "1.0.0-SNAPSHOT"
   :description "Improved SAML 2.0 library for SSO."
   :url "https://github.com/metabase/saml20-clj"
   :min-lein-version "2.5.0"
@@ -18,6 +18,7 @@
   :dependencies
   [[org.clojure/data.xml "0.0.8"]
    [org.clojure/data.zip "0.1.3"]
+   [org.clojure/tools.logging "0.4.1"]
    [clj-time "0.15.1"]
    [compojure "1.6.1"]
    [hiccup "1.0.5"]

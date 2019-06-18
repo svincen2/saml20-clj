@@ -17,6 +17,7 @@
            javax.crypto.Mac
            javax.crypto.spec.SecretKeySpec
            org.apache.commons.codec.binary.Base64
+           java.security.cert.X509Certificate
            org.apache.commons.io.IOUtils))
 
 (def instant-format (ctimeformat/formatters :date-time-no-ms))
@@ -108,7 +109,7 @@
    (let [ba (byte-array size)
          r (Random.)]
      (.nextBytes r ba)
-     ba) )
+     ba))
   ([]
    (random-bytes 20)))
 
@@ -170,6 +171,12 @@
     (with-open [is (io/input-stream keystore-filename)]
       (doto (KeyStore/getInstance "JKS")
         (.load is (.toCharArray keystore-password))))))
+
+(defn x509-certificate-from-keystore
+  ^X509Certificate [^KeyStore keystore, ^String cert-alias]
+  (when-let [cert (.getCertificate keystore cert-alias)]
+    (assert (instance? X509Certificate cert))
+    cert))
 
 (defn get-certificate-b64
   ^String [keystore-filename, ^String keystore-password, ^String cert-alias]
