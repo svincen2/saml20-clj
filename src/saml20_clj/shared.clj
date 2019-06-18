@@ -16,7 +16,7 @@
            [java.util.zip Deflater DeflaterOutputStream Inflater InflaterInputStream]
            javax.crypto.Mac
            javax.crypto.spec.SecretKeySpec
-           org.apache.commons.codec.binary.Base64
+           [org.apache.commons.codec.binary Base64 Hex]
            org.apache.commons.io.IOUtils))
 
 (def instant-format (ctimeformat/formatters :date-time-no-ms))
@@ -52,7 +52,7 @@
   ^Certificate [^String x509-string]
   (let [x509-byte-array (clean-x509-filter x509-string)
         cert-factory    (CertificateFactory/getInstance "X.509")]
-    (with-open [is (ByteArrayInputStream. (bytes (Base64/encodeBase64 x509-byte-array)))]
+    (with-open [is (ByteArrayInputStream. (Base64/decodeBase64 x509-byte-array))]
       (.generateCertificate cert-factory is))))
 
 
@@ -91,13 +91,13 @@
   ^String [^String string]
   (-> string str->bytes Base64/encodeBase64 bytes->str))
 
-(defn base64->str
-  ^String [^String string]
-  (-> string str->bytes Base64/decodeBase64 bytes->str))
-
 (defn str->deflate->base64
   [^String string]
   (-> string str->bytes byte-deflate Base64/encodeBase64 bytes->str))
+
+(defn base64->str
+  ^String [^String string]
+  (-> string str->bytes Base64/decodeBase64 bytes->str))
 
 (defn base64->inflate->str
   [^String string]
@@ -112,20 +112,9 @@
   (^bytes []
    (random-bytes 20)))
 
-(def ^String bytes->hex
-  (let [digits (into {} (map-indexed vector "0123456789ABCDEF") )]
-    (fn [^bytes bytes-str]
-      (let [ret (char-array (* 2 (alength bytes-str)))]
-        (loop  [idx 0]
-          (if (< idx  (alength bytes-str))
-            (let [pos (* 2 idx)
-                  b   (aget bytes-str idx)
-                  d1  (unsigned-bit-shift-right (bit-and 0xF0 b) 4)
-                  d2  (bit-and 0x0F b)]
-              (aset-char ret pos (digits d1))
-              (aset-char ret (unchecked-inc pos) (digits d2))
-              (recur (unchecked-inc idx)))
-            (String. ret)))))))
+(defn bytes->hex
+  ^String [^bytes bytes-str]
+  (Hex/encodeHexString bytes-str))
 
 (defn new-secret-key-spec ^SecretKeySpec []
   (SecretKeySpec. (random-bytes) "HmacSHA1"))
@@ -180,7 +169,7 @@
 (defn get-certificate-b64
   ^String [keystore-filename, ^String keystore-password, ^String cert-alias]
   (when-let [ks (load-key-store keystore-filename keystore-password)]
-    (-> ks (.getCertificate cert-alias) (.getEncoded) Base64/decodeBase64 (String. "UTF-8"))))
+    (-> ks (.getCertificate cert-alias) .getEncoded Base64/encodeBase64 (String. "UTF-8"))))
 
 
 ;; https://www.purdue.edu/apps/account/docs/Shibboleth/Shibboleth_information.jsp
