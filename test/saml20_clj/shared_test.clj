@@ -1,6 +1,7 @@
 (ns saml20-clj.shared-test
   (:require [expectations :refer [expect]]
-            [saml20-clj.shared :as shared]))
+            [saml20-clj.shared :as shared])
+  (:import org.apache.commons.io.IOUtils))
 
 (def ^:private test-string
   "Th1s 15 50m3 s7r1ng w17h 13773r5 and numb3rs!")
@@ -23,13 +24,13 @@
 
 ;; Testing string to stream and stream to string transformations.
 (expect
- (shared/read-to-end (shared/str->inputstream test-string))
- test-string)
+ test-string
+ (shared/bytes->str (IOUtils/toByteArray (shared/str->inputstream test-string))))
 
 ;; Testing xml parsing from a string.
 (expect
- (shared/parse-xml-str test-xml)
- test-xml-response)
+ test-xml-response
+ (shared/parse-xml-str test-xml))
 
 ;; make sure conversion to/from base 64 works as expected
 (expect
