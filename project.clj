@@ -1,4 +1,4 @@
-(defproject metabase/saml20-clj "1.0.2-SNAPSHOT"
+(defproject metabase/saml20-clj "1.0.2"
   :description "Improved SAML 2.0 library for SSO."
   :url "https://github.com/metabase/saml20-clj"
   :min-lein-version "2.5.0"

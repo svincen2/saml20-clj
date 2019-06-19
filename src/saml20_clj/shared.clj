@@ -39,9 +39,12 @@
 
 
 (defn clean-x509-filter
-  "Turns a base64 string into a byte array to be decoded, which includes sanitization."
+  "Turns a base64 string into a byte array to be decoded, which includes sanitization
+   and removal of ASCII armor"
   ^bytes [^String x509-string]
   (-> x509-string
+      (str/replace #"-----BEGIN CERTIFICATE-----" "")
+      (str/replace #"-----END CERTIFICATE-----" "")
       (str/replace #"[\n ]" "")
       ((partial map byte))
       byte-array
