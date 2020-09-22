@@ -17,15 +17,15 @@
 
   :dependencies
   [[org.clojure/data.xml "0.0.8"]
-   [org.clojure/data.zip "0.1.3"]
-   [org.clojure/tools.logging "0.5.0-alpha.1"]
-   [clj-time "0.15.1"]
-   [compojure "1.6.1"]
+   [org.clojure/data.zip "1.0.0"]
+   [org.clojure/tools.logging "1.1.0"]
+   [clj-time "0.15.2"]
+   [compojure "1.6.2"]
    [hiccup "1.0.5"]
-   [org.apache.santuario/xmlsec "2.1.3"]
+   [org.apache.santuario/xmlsec "2.2.0"]
    [org.opensaml/opensaml "2.6.4"]
    [org.vlacs/helmsman "1.0.0"]
-   [ring "1.7.1"]]
+   [ring "1.8.1"]]
 
   :profiles
   {:dev
