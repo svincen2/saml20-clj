@@ -7,7 +7,7 @@
              [xml :as xml]
              [zip :as zip]]
             [clojure.java.io :as io]
-            [ring.util.codec :as codec :refer [form-encode]])
+            [ring.util.codec :as codec])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream]
            java.nio.charset.Charset
            [java.security KeyStore PublicKey]
@@ -131,7 +131,7 @@
 
 (defn uri-query-str
   [clean-hash]
-  (form-encode clean-hash))
+  (codec/form-encode clean-hash))
 
 (defn form-encode-b64
   [req]
@@ -143,7 +143,7 @@
 (defn saml-form-encode [form]
   (-> form
       form-encode-b64
-      form-encode))
+      codec/form-encode))
 
 (defn time-since
   [time-span]

@@ -11,7 +11,7 @@
             [hiccup
              [core :as hiccup]
              [page :as h.page]]
-            [ring.util.response :refer [redirect]]
+            [ring.util.response :as ring.response]
             [saml20-clj
              [shared :as shared]
              [xml :as saml-xml]])
@@ -132,7 +132,7 @@
 (defn get-idp-redirect
   "Return Ring response for HTTP 302 redirect."
   [idp-url saml-request relay-state]
-  (redirect
+  (ring.response/redirect
     (str idp-url
          "?"
          (let [saml-request (shared/str->deflate->base64 saml-request)]

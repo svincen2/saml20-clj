@@ -12,7 +12,7 @@
 (def saml-format "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect")
 
 (defn redirect-to-saml [continue-to-url]
-  {:status  302 ;; Found
+  {:status  302 ; Found
    :headers {"Location" (str "/saml?continue=" continue-to-url)}
    :body    ""})
 
