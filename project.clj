@@ -75,5 +75,5 @@
   [["clojars"
     {:url           "https://clojars.org/repo"
      :username      :env/clojars_username
-     :password      :env/clojars_password
+     :password      :env/clojars_deploy_token
      :sign-releases false}]])
