@@ -7,7 +7,7 @@
             :url  "https://raw.githubusercontent.com/metabase/saml20-clj/master/LICENSE"}
 
   :aliases
-  {"test"                      ["with-profile" "+expectations" "expectations"]
+  {"test"                      ["with-profile" "+test" "test"]
    "bikeshed"                  ["with-profile" "+bikeshed" "bikeshed" "--max-line-length" "150"]
    "check-namespace-decls"     ["with-profile" "+check-namespace-decls" "check-namespace-decls"]
    "eastwood"                  ["with-profile" "+eastwood" "eastwood"]
@@ -31,11 +31,11 @@
   {:dev
    {:dependencies
     [[org.clojure/clojure "1.10.1"]
-     [expectations "2.2.0-beta2"]]
+     [pjstadig/humane-test-output "0.10.0"]]
 
     :injections
-    [(require 'expectations)
-     ((resolve 'expectations/disable-run-on-shutdown))]
+    [(require 'pjstadig.humane-test-output)
+     (pjstadig.humane-test-output/activate!)]
 
     :jvm-opts
     ["-Xverify:none"]}

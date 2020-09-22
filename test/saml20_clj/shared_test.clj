@@ -1,5 +1,5 @@
 (ns saml20-clj.shared-test
-  (:require [expectations :refer [expect]]
+  (:require [clojure.test :refer :all]
             [saml20-clj.shared :as shared])
   (:import java.security.PublicKey
            org.apache.commons.io.IOUtils))
@@ -23,47 +23,38 @@
                :content ["inter arma enim silent leges"]}]}
    nil])
 
-;; Testing string to stream and stream to string transformations.
-(expect
- test-string
- (shared/bytes->str (IOUtils/toByteArray (shared/str->inputstream test-string))))
+(deftest bytes->str-test
+  (testing "Testing string to stream and stream to string transformations."
+    (is (= test-string
+           (shared/bytes->str (IOUtils/toByteArray (shared/str->inputstream test-string))))))
+  (testing "make sure we can encode string -> bytes -> hex"
+    (is (= "41424358595a"
+           (-> "ABCXYZ" shared/str->bytes shared/bytes->hex)))))
 
-;; Testing xml parsing from a string.
-(expect
- test-xml-response
- (shared/parse-xml-str test-xml))
+(deftest parse-xml-str-test
+  (testing "Testing xml parsing from a string."
+    (is (= test-xml-response
+           (shared/parse-xml-str test-xml)))))
 
-;; make sure conversion to/from base 64 works as expected
-(expect
- "QUJDREVG"
- (shared/str->base64 "ABCDEF"))
+(deftest base-64-test
+  (testing "make sure conversion to/from base 64 works as expected"
+    (is (= "QUJDREVG"
+           (shared/str->base64 "ABCDEF")))
+    (is (= "ABCDEF"
+           (shared/base64->str "QUJDREVG")))))
 
-(expect
- "ABCDEF"
- (shared/base64->str "QUJDREVG"))
+(deftest base-64-deflate-inflate-test
+  (testing "make sure conversion to/from base 64 w/ DEFLATE compression works as expected"
+    (is (= "c3RydnF1AwA="
+           (shared/str->deflate->base64 "ABCDEF")))
+    (is (= "ABCDEF"
+           (shared/base64->inflate->str "c3RydnF1AwA="))))
 
-;; make sure conversion to/from base 64 w/ DEFLATE compression works as expected
-(expect
- "c3RydnF1AwA="
- (shared/str->deflate->base64 "ABCDEF"))
-
-(expect
- "ABCDEF"
- (shared/base64->inflate->str "c3RydnF1AwA="))
-
-;; we should be able to decode base-64 stuff that contains newlines in it
-(expect
- "ABCDEF"
- (shared/base64->inflate->str "c3Ry\ndnF1\r\nAwA="))
-
-(expect
- "ABCDEF"
- (shared/base64->str "QUJDR\nEV\r\nG"))
-
-;; make sure we can encode string -> bytes -> hex
-(expect
- "41424358595a"
- (-> "ABCXYZ" shared/str->bytes shared/bytes->hex))
+  (testing "we should be able to decode base-64 stuff that contains newlines in it"
+    (is (= "ABCDEF"
+           (shared/base64->inflate->str "c3Ry\ndnF1\r\nAwA=")))
+    (is (= "ABCDEF"
+           (shared/base64->str "QUJDR\nEV\r\nG")))))
 
 (def ^:private test-certificate-string-01
   "MIIDsjCCApqgAwIBAgIGAWtM1OOxMA0GCSqGSIb3DQEBCwUAMIGZMQswCQYDVQQGEwJVUzETMBEG
@@ -145,22 +136,16 @@ l8z5Ek8dC4NNpfpcZc/teT1WqiO2wnpGHjgMDuDL1mxCZNL422jHpiPWkWp3AuDI
 c7tL1QjbfAUHAQYwmHkWgPP+T2wAv0pOt36GgMCM
 -----END CERTIFICATE-----")
 
-;; make sure we can parse a certificate, no armor
-(expect
-  PublicKey
-  (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-01)))
-
-;; make sure we can parse a certificate with armor 512b key
-(expect
-  PublicKey
-  (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-02)))
-
-;; make sure we can parse a certificate with armor 2048b key
-(expect
-  PublicKey
-  (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-03)))
-
-;; make sure we can parse a certificate with armor 4096b key
-(expect
-  PublicKey
-  (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-04)))
+(deftest parse-certificate-test
+  (testing "make sure we can parse a certificate, no armor"
+    (is (instance? PublicKey
+                   (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-01)))))
+  (testing "make sure we can parse a certificate with armor 512b key"
+    (is (instance? PublicKey
+                   (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-02)))))
+  (testing "make sure we can parse a certificate with armor 2048b key"
+    (is (instance? PublicKey
+                   (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-03)))))
+  (testing "make sure we can parse a certificate with armor 4096b key"
+    (is (instance? PublicKey
+                   (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-04))))))
