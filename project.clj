@@ -45,7 +45,7 @@
 
    :eastwood
    {:plugins
-    [[jonase/eastwood "0.3.5" :exclusions [org.clojure/clojure]]]
+    [[jonase/eastwood "0.3.11" :exclusions [org.clojure/clojure]]]
 
     :add-linters
     [:unused-private-vars
