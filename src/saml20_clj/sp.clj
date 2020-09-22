@@ -11,7 +11,6 @@
             [hiccup
              [core :as hiccup]
              [page :as h.page]]
-            [ring.util.response :as ring.response]
             [saml20-clj
              [shared :as shared]
              [xml :as saml-xml]])
@@ -131,13 +130,15 @@
 
 (defn get-idp-redirect
   "Return Ring response for HTTP 302 redirect."
-  [idp-url saml-request relay-state]
-  (ring.response/redirect
-    (str idp-url
-         "?"
-         (let [saml-request (shared/str->deflate->base64 saml-request)]
-           (shared/uri-query-str
-             {:SAMLRequest saml-request :RelayState relay-state})))))
+  [idp-url saml-request-str relay-state]
+  (let [url (str idp-url
+                 "?"
+                 (let [saml-request-str (shared/str->deflate->base64 saml-request-str)]
+                   (shared/uri-query-str
+                    {:SAMLRequest saml-request-str, :RelayState relay-state})))]
+    {:status  302 ; found
+     :headers {"Location" url}
+     :body    ""}))
 
 (defn pull-attrs
   [loc attrs]
@@ -181,7 +182,6 @@
   (let [xml           (parse (shared/str->inputstream raw-response))
         parsed-zipper (zip/xml-zip xml)]
     (response->map parsed-zipper)))
-
 
 (defn make-saml-signer
   [keystore-filename, ^String keystore-password, key-alias & {:keys [algorithm] :or {algorithm :sha1}}]
