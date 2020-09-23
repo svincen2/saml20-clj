@@ -16,6 +16,10 @@
    ;; `lein lint` will run all linters
    "lint"                      ["do" ["eastwood"] ["bikeshed"] ["check-namespace-decls"] ["cloverage"]]}
 
+  ;; OpenSAML isn't officially on Maven Central -- https://wiki.shibboleth.net/confluence/display/DEV/Use+of+Maven+Central
+  :repositories
+  [["opensaml" "https://build.shibboleth.net/nexus/content/repositories/releases/"]]
+
   :dependencies
   [[org.clojure/data.xml "0.0.8"]
    [org.clojure/data.zip "1.0.0"]
@@ -24,7 +28,12 @@
    [commons-io/commons-io "2.8.0"]
    [hiccup "1.0.5"]
    [org.apache.santuario/xmlsec "2.2.0"]
-   [org.opensaml/opensaml "2.6.4"]
+   [org.opensaml/opensaml-core "3.4.5"]
+   [org.opensaml/opensaml-saml-api "3.4.5"]
+   [org.opensaml/opensaml-saml-impl "3.4.5"]
+   [org.opensaml/opensaml-xmlsec-api "3.4.5"]
+   [org.opensaml/opensaml-xmlsec-impl "3.4.5"]
+   [potemkin "0.4.5"]
    [ring/ring-codec "1.1.2"]]           ; for the url-encode codec
 
   :profiles

@@ -1,7 +1,7 @@
 (ns saml20-clj.shared
   (:require [clj-time
-             [core :as ctime]
-             [format :as ctimeformat]]
+             [core :as c.time]
+             [format :as c.format]]
             [clojure
              [string :as str]
              [xml :as xml]
@@ -17,9 +17,18 @@
            javax.crypto.Mac
            javax.crypto.spec.SecretKeySpec
            [org.apache.commons.codec.binary Base64 Hex]
-           org.apache.commons.io.IOUtils))
+           org.apache.commons.io.IOUtils
+           org.apache.xml.security.Init))
 
-(def instant-format (ctimeformat/formatters :date-time-no-ms))
+;; these have to be initialized before using. TODO -- it would be better to put these in their own respective delays
+;; and deref inside relevant functions
+(defonce ^:private -init
+  (do
+    (org.apache.xml.security.Init/init)
+    (org.opensaml.core.config.InitializationService/initialize)
+    nil))
+
+(def instant-format (c.format/formatters :date-time-no-ms))
 (def ^Charset utf-charset (Charset/forName "UTF-8"))
 
 (def status-code-success "urn:oasis:names:tc:SAML:2.0:status:Success")
@@ -35,8 +44,8 @@
 
 (defn parse-xml-str
   [^String xml-str]
-  (zip/xml-zip (xml/parse (ByteArrayInputStream. (.getBytes xml-str)))))
-
+  (zip/xml-zip (with-open [is (ByteArrayInputStream. (.getBytes xml-str))]
+                 (xml/parse is))))
 
 (defn clean-x509-filter
   "Turns a base64 string into a byte array to be decoded, which includes sanitization
@@ -58,7 +67,6 @@
     (with-open [is (ByteArrayInputStream. (Base64/decodeBase64 x509-byte-array))]
       (.generateCertificate cert-factory is))))
 
-
 (defn str->inputstream
   "Unravels a string into an input stream so we can work with Java constructs."
   ^ByteArrayInputStream [^String unravel]
@@ -67,7 +75,7 @@
 (defn make-issue-instant
   "Converts a date-time to a SAML 2.0 time string."
   [ii-date]
-  (ctimeformat/unparse instant-format ii-date))
+  (c.format/unparse instant-format ii-date))
 
 (defn str->bytes
   ^bytes [^String some-string]
@@ -147,14 +155,14 @@
 
 (defn time-since
   [time-span]
-  (ctime/minus (ctime/now) time-span))
+  (c.time/minus (c.time/now) time-span))
 
 (defn make-timeout-filter-fn
   "Creates a function for clojure.core/filter to keep all dates after
   a given date."
   [timespan]
   (fn [i]
-    (ctime/after? (second i) (time-since timespan))))
+    (c.time/after? (second i) (time-since timespan))))
 
 (defn load-key-store
   ^KeyStore [keystore-filename, ^String keystore-password]
@@ -196,4 +204,4 @@
                "urn:oid:1.3.6.1.4.1.5923.1.1.1.10" "eduPersonTargetedID"
                "urn:oid:1.3.6.1.4.1.5923.1.6.1.1"  "eduCourseOffering"}]
     (fn [attr-oid]
-      (get names attr-oid attr-oid) )))
+      (get names attr-oid attr-oid))))

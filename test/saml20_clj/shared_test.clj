@@ -26,7 +26,8 @@
 (deftest bytes->str-test
   (testing "Testing string to stream and stream to string transformations."
     (is (= test-string
-           (shared/bytes->str (IOUtils/toByteArray (shared/str->inputstream test-string))))))
+           (shared/bytes->str (with-open [is (shared/str->inputstream test-string)]
+                                (IOUtils/toByteArray is))))))
   (testing "make sure we can encode string -> bytes -> hex"
     (is (= "41424358595a"
            (-> "ABCXYZ" shared/str->bytes shared/bytes->hex)))))

@@ -38,7 +38,8 @@
 (defn str->xmldoc
   ^Document [^String parsable-str]
   (let [document (document-builder)]
-    (.parse document (saml-shared/str->inputstream parsable-str))))
+    (with-open [is (saml-shared/str->inputstream parsable-str)]
+      (.parse document is))))
 
 (defn xmlsig-from-xmldoc
   [^Document xmldoc]
@@ -68,4 +69,6 @@
 (defn dom-node->str
   ^String [^Node dom-node]
   (let [canonicalizer (Canonicalizer/getInstance Canonicalizer/ALGO_ID_C14N_EXCL_OMIT_COMMENTS)]
-    (String. (.canonicalizeSubtree canonicalizer dom-node))))
+    (with-open [os (java.io.ByteArrayOutputStream.)]
+      (.canonicalizeSubtree canonicalizer dom-node os)
+      (.toString os "UTF-8"))))
