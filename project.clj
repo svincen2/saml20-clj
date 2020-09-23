@@ -40,8 +40,8 @@
     :jvm-opts
     ["-Xverify:none"]}
 
-   :expectations
-   {:plugins [[lein-expectations "0.0.8" :exclusions [expectations]]]}
+   :repl
+   {:global-vars {*warn-on-reflection* true}}
 
    :eastwood
    {:plugins
