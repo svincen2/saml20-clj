@@ -77,7 +77,7 @@
    ;; Using Cam's fork of Cloverage until 1.2.1 of the main repo is out. Once that's released we can switch back.
    {:dependencies [[camsaul/cloverage "1.2.1.1"]]
     :plugins      [[camsaul/lein-cloverage  "1.2.1.1"]]
-    :cloverage    {:fail-threshold 76}}}
+    :cloverage    {:fail-threshold 70}}}
 
   :deploy-repositories
   [["clojars"
