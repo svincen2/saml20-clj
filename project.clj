@@ -55,14 +55,14 @@
    {:plugins
     [[jonase/eastwood "0.3.11" :exclusions [org.clojure/clojure]]]
 
-    :add-linters
-    [:unused-private-vars
-     :unused-namespaces
-     :unused-fn-args
-     :unused-locals]
+    :eastwood
+    {:add-linters
+     [:unused-fn-args
+      :unused-locals]
 
-    :exclude-linters
-    [:deprecations]}
+     :exclude-linters
+     [:deprecations
+      :unused-ret-vals]}}
 
    :bikeshed
    {:plugins

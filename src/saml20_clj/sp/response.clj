@@ -120,7 +120,7 @@
   assertions), and the signature(s) are valid for the `idp-cert-str` (as a base-64 encoded string)."
   [response idp-public-key sp-private-key]
   (when-let [response (coerce/->Response response)]
-    (when-let [idp-credentail (coerce/->Credential idp-public-key)]
+    (when-let [idp-public-key (coerce/->Credential idp-public-key)]
       (try
         (assert-valid-signature response idp-public-key)
         (let [assertions (opensaml-assertions response sp-private-key)]
@@ -133,8 +133,8 @@
           false)))))
 
 ;; TODO
-(defn validate [^Response response ^String idp-cert-str]
-  "From the SAML spec: https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf
+#_(defn validate [^Response response ^String idp-cert-str]
+    "From the SAML spec: https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf
 
   Regardless of the SAML binding used, the service provider MUST do the following:
 

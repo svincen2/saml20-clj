@@ -54,7 +54,6 @@
     (when-let [element (coerce/->Element element)]
       (when (= (.getNodeName element) "saml:EncryptedAssertion")
         (decrypt! sp-private-key element))
-      element
       (doseq [i     (range (.. element getChildNodes getLength))
               :let  [child (.. element getChildNodes (item i))]
               :when (instance? org.w3c.dom.Element child)]

@@ -79,7 +79,7 @@
 
 (defn create-request
   "Return XML elements that represent a SAML 2.0 auth request."
-  [time-issued saml-format saml-service-name saml-id acs-url idp-uri]
+  [time-issued saml-service-name saml-id acs-url idp-uri]
   (str
     (h.page/xml-declaration "UTF-8")
     (hiccup/html
@@ -128,20 +128,19 @@
 
 (defn ^:deprecated create-request-factory
   "Creates new requests for a particular service, format, and acs-url."
-  ([mutables idp-uri saml-format saml-service-name acs-url]
+  ([mutables idp-uri saml-service-name acs-url]
    (create-request-factory
     #(str "_" (next-saml-id! (:saml-last-id mutables)))
     (partial bump-saml-id-timeout! (:saml-id-timeouts mutables))
     (:xml-signer mutables)
-    idp-uri saml-format saml-service-name acs-url))
+    idp-uri saml-service-name acs-url))
 
-  ([next-saml-id-fn! bump-saml-id-timeout-fn! xml-signer idp-uri saml-format saml-service-name acs-url]
+  ([next-saml-id-fn! bump-saml-id-timeout-fn! xml-signer idp-uri saml-service-name acs-url]
    (fn request-factory []
      (let [current-time  (c.time/now)
            new-saml-id   (next-saml-id-fn!)
            issue-instant (make-issue-instant current-time)
            new-request   (create-request issue-instant
-                                         saml-format
                                          saml-service-name
                                          new-saml-id
                                          acs-url

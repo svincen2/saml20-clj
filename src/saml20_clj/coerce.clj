@@ -89,13 +89,14 @@
                                     "AES"))
 
 ;; I don't think we can use the "class name" of a byte array in `extend-protocol`
-(extend-type (Class/forName "[B")
+(extend (Class/forName "[B")
   CoerceToPrivateKey
-  (->PrivateKey
-    ([this]
-     (->PrivateKey this :rsa))
-    ([this algorithm]
-     (bytes->PrivateKey this algorithm))))
+  {:->PrivateKey
+   (fn
+     ([^bytes this]
+      (->PrivateKey this :rsa))
+     ([^bytes this algorithm]
+      (bytes->PrivateKey this algorithm)))})
 
 (extend-protocol CoerceToPrivateKey
   nil
@@ -137,12 +138,14 @@
     ([[_ k] algorithm]
      (->PrivateKey k algorithm))))
 
-(extend-type (Class/forName "[B")
+(extend (Class/forName "[B")
   CoerceToX509Certificate
-  (->X509Certificate [this]
-    (let [cert-factory (java.security.cert.CertificateFactory/getInstance "X.509")]
-      (with-open [is (java.io.ByteArrayInputStream. this)]
-        (.generateCertificate cert-factory is)))))
+  {:->X509Certificate
+   (fn [^bytes this]
+     (let [cert-factory (java.security.cert.CertificateFactory/getInstance
+                         "X.509")]
+       (with-open [is (java.io.ByteArrayInputStream. this)]
+         (.generateCertificate cert-factory is))))})
 
 (extend-protocol CoerceToX509Certificate
   nil
@@ -153,7 +156,11 @@
     (->X509Certificate (encode-decode/base64-credential->bytes s)))
 
   java.security.cert.X509Certificate
-  (->X509Certificate [this] this))
+  (->X509Certificate [this] this)
+
+  org.opensaml.security.x509.BasicX509Credential
+  (->X509Certificate [this]
+    (.getEntityCertificate this)))
 
 (extend-protocol CoerceToCredential
   nil

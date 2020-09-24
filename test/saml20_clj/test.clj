@@ -68,10 +68,11 @@
   [_]
   (sample-file "response-with-signed-message-and-signed-and-encryped-assertion.xml"))
 
-(defn responses []
+(defn responses
   "All the sample responses above but in a convenient format for writing test code that loops over them.
 
   TODO -- invalid responses with an `:invalid-reason`."
+  []
   (for [[dispatch-value f] (methods response)]
     (assoc dispatch-value :response (f dispatch-value))))
 
