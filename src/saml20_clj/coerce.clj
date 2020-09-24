@@ -22,6 +22,44 @@
     (.init (org.opensaml.xmlsec.config.impl.JavaCryptoValidationInitializer.))
     nil))
 
+(defprotocol CoerceToPrivateKey
+  (->PrivateKey
+    ^java.security.PrivateKey [this]
+    ^java.security.PrivateKey [this ^String algorithm]
+    "Coerce something such as a base-64-encoded string or byte array to a `PrivateKey`. This isn't used directly by
+ OpenSAML -- the key must be passed as part of an OpenSAML `Credential`. See `->Credential`."))
+
+(defprotocol CoerceToX509Certificate
+  (->X509Certificate ^java.security.cert.X509Certificate [this]
+    "Coerce something such as a base-64-encoded string or byte array to a `java.security.cert.X509Certificate`. This
+ class isn't used directly by OpenSAML; instead, certificate must be coerced to an OpenSAML `Credential`. See
+`->Credential`."))
+
+(defprotocol CoerceToCredential
+  (->Credential
+    ^org.opensaml.security.credential.Credential [this]
+    ^org.opensaml.security.credential.Credential [public-key private-key]
+    "Coerce something such as a byte array or base-64-encoded String to an OpenSAML `Credential`. Typically, you'd use
+  the credential with just the public key for the IdP's credentials, for encrypting requests (in combination with SP
+  credentails) or verifying signature(s) in the response. A credential with both public and private keys would
+  typically contain *your* public and private keys, for encrypting requests (in combination with IdP credentials) or
+  for decrypting encrypted assertions in the response."))
+
+(defprotocol CoerceToElement
+  (->Element ^org.w3c.dom.Element [this]))
+
+(defprotocol CoerceToSAMLObject
+  (->SAMLObject ^org.opensaml.saml.common.SignableSAMLObject [this]))
+
+(defprotocol CoerceToResponse
+  (->Response ^org.opensaml.saml.saml2.core.Response [this]))
+
+(defprotocol SerializeXMLString
+  (->xml-string ^String [this]))
+
+
+;;; ------------------------------------------------------ Impl ------------------------------------------------------
+
 (defn keystore
   ^java.security.KeyStore [{:keys [keystore ^String filename ^String password]}]
   (or keystore
@@ -43,12 +81,12 @@
   (.generatePrivate (java.security.KeyFactory/getInstance (str/upper-case (name algorithm)), "BC")
                     (java.security.spec.PKCS8EncodedKeySpec. key-bytes)))
 
-(defprotocol CoerceToPrivateKey
-  (->PrivateKey
-    ^java.security.PrivateKey [this]
-    ^java.security.PrivateKey [this ^String algorithm]
-    "Coerce something such as a base-64-encoded string or byte array to a `PrivateKey`. This isn't used directly by
- OpenSAML -- the key must be passed as part of an OpenSAML `Credential`. See `->X509Credential`."))
+(defmethod bytes->PrivateKey :aes
+  [^bytes key-bytes _]
+  (javax.crypto.spec.SecretKeySpec. key-bytes
+                                    0
+                                    (count key-bytes)
+                                    "AES"))
 
 ;; I don't think we can use the "class name" of a byte array in `extend-protocol`
 (extend-type (Class/forName "[B")
@@ -90,13 +128,14 @@
          (assert (instance? java.security.PrivateKey key))
          key)))
     ([this _]
-     (->PrivateKey this))))
+     (->PrivateKey this)))
 
-(defprotocol CoerceToX509Certificate
-  (->X509Certificate ^java.security.cert.X509Certificate [this]
-    "Coerce something such as a base-64-encoded string or byte array to a `java.security.cert.X509Certificate`. This
- class isn't used directly by OpenSAML; instead, certificate must be coerced to an OpenSAML `Credential`. See
-`->X509Credential`."))
+  clojure.lang.IPersistentVector
+  (->PrivateKey
+    ([[_ k]]
+     (->PrivateKey k))
+    ([[_ k] algorithm]
+     (->PrivateKey k algorithm))))
 
 (extend-type (Class/forName "[B")
   CoerceToX509Certificate
@@ -116,27 +155,16 @@
   java.security.cert.X509Certificate
   (->X509Certificate [this] this))
 
-(defprotocol CoerceToX509Credential
-  (->X509Credential
-    ^org.opensaml.security.x509.X509Credential [this]
-    ^org.opensaml.security.x509.X509Credential [public-key private-key]
-    "Coerce something such as a byte array or base-64-encoded String to an OpenSAML `Credential`. `public-key` is anything
-  that can be coerced to an `X509Certificate`; `private-key`, which is optional, is anything that can be coerced to a
-  `PrivateKey`. Typically, you'd use the credential with just the public key for the IdP's credentials, for encrypting
-  requests (in combination with SP credentails) or verifying signature(s) in the response. A credential with both
-  public and private keys would typically contain *your* public and private keys, for encrypting requests (in
-  combination with IdP credentials) or for decrypting encrypted assertions in the response."))
-
-(extend-protocol CoerceToX509Credential
+(extend-protocol CoerceToCredential
   nil
-  (->X509Credential
+  (->Credential
     ([_] nil)
     ([_ _] nil))
 
   Object
-  (->X509Credential
+  (->Credential
     ([public-key]
-     (->X509Credential public-key nil))
+     (->Credential public-key nil))
     ([public-key private-key]
      (let [cert (->X509Certificate public-key)]
        (if private-key
@@ -144,38 +172,34 @@
          (org.opensaml.security.x509.BasicX509Credential. cert)))))
 
   clojure.lang.IPersistentMap
-  (->X509Credential
+  (->Credential
     ([{^String key-alias :alias, ^String password :password, :as m}]
      (when (and key-alias password)
        (when-let [keystore (keystore m)]
          (org.opensaml.security.x509.impl.KeyStoreX509CredentialAdapter. keystore key-alias (.toCharArray password)))))
     ([m private-key]
-     (let [credential (->X509Credential m)
-           cert       (.getEntityCertificate credential)]
-       (->X509Credential cert private-key))))
+     (let [credential (->Credential m)
+           public-key (.getPublicKey credential)]
+       (->Credential public-key private-key))))
 
   clojure.lang.IPersistentVector
-  (->X509Credential [[public-key private-key]]
-    (->X509Credential public-key private-key)))
+  (->Credential [[public-key private-key]]
+    (->Credential public-key private-key))
 
-(defprotocol SerializeXMLString
-  (->xml-string [this]))
+  java.security.PublicKey
+  (->Credential [this]
+    (org.opensaml.security.credential.BasicCredential. this))
 
-(extend-protocol SerializeXMLString
-  nil
-  (->xml-string [_] nil)
+  javax.crypto.spec.SecretKeySpec
+  (->Credential [this]
+    (org.opensaml.security.credential.BasicCredential. this))
 
-  String
-  (->xml-string [this] this)
-
-  clojure.lang.IPersistentVector
-  (->xml-string [this]
-    (str
-     (h.page/xml-declaration "UTF-8")
-     (hiccup/html this))))
-
-(defprotocol CoerceToElement
-  (->Element ^org.w3c.dom.Element [this]))
+  java.security.interfaces.RSAPrivateCrtKey
+  (->Credential [this]
+    (org.opensaml.security.credential.BasicCredential.
+     (.generatePublic (java.security.KeyFactory/getInstance "RSA")
+                      (java.security.spec.RSAPublicKeySpec. (.getModulus this) (.getPublicExponent this)))
+     this)))
 
 (extend-protocol CoerceToElement
   nil
@@ -190,9 +214,12 @@
 
   org.opensaml.core.xml.XMLObject
   (->Element [this]
-    (->Element (.marshall (.getMarshaller (org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport/getMarshallerFactory)
-                                          this)
-                          this)))
+    (let [marshaller-factory (org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport/getMarshallerFactory)
+          marshaller         (.getMarshaller marshaller-factory this)]
+      (when-not marshaller
+        (throw (ex-info (format "Don't know how to marshall %s" (.getCanonicalName (class this)))
+                        {:object this})))
+      (->Element (.marshall marshaller this))))
 
   String
   (->Element [this]
@@ -203,9 +230,6 @@
   clojure.lang.IPersistentVector
   (->Element [this]
     (->Element (->xml-string this))))
-
-(defprotocol CoerceToSAMLObject
-  (->SAMLObject ^org.opensaml.saml.common.SignableSAMLObject [this]))
 
 (extend-protocol CoerceToSAMLObject
   nil
@@ -218,20 +242,18 @@
   (->SAMLObject [this]
     (let [unmarshaller-factory (org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport/getUnmarshallerFactory)
           unmarshaller         (.getUnmarshaller unmarshaller-factory this)]
+      (when-not unmarshaller
+        (throw (ex-info (format "Don't know how to unmarshall %s" (.getCanonicalName (class this)))
+                        {:object this})))
       (.unmarshall unmarshaller this)))
 
-  org.w3c.dom.Element
+  org.w3c.dom.Document
   (->SAMLObject [this]
-    (let [unmarshaller-factory (org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport/getUnmarshallerFactory)
-          unmarshaller         (.getUnmarshaller unmarshaller-factory this)]
-      (.unmarshall unmarshaller this)))
+    (->SAMLObject (.getDocumentElement this)))
 
   Object
   (->SAMLObject [this]
     (->SAMLObject (->Element this))))
-
-(defprotocol CoerceToResponse
-  (->Response ^org.opensaml.saml.saml2.core.Response [this]))
 
 (extend-protocol CoerceToResponse
   nil
@@ -249,9 +271,9 @@
   (->Response [this]
     (->Response (->SAMLObject this))))
 
-(defprotocol CoerceToDecrypter
+#_(defprotocol CoerceToDecrypter
   (->Decrypter ^org.opensaml.saml.saml2.encryption.Decrypter [this]))
-
+#_
 (extend-protocol CoerceToDecrypter
   nil
   (->Decrypter [_] nil)
@@ -262,17 +284,47 @@
   org.opensaml.security.x509.X509Credential
   (->Decrypter [credential]
     (when (.getPrivateKey credential)
-      (org.opensaml.saml.saml2.encryption.Decrypter.
-       nil
-       (org.opensaml.xmlsec.keyinfo.impl.StaticKeyInfoCredentialResolver. credential)
-       ;; these resolvers are chained together so OpenSAML can look in different places around the assertion to find
-       ;; the encryption key.
-       (org.opensaml.xmlsec.encryption.support.ChainingEncryptedKeyResolver.
-        (list (org.opensaml.xmlsec.encryption.support.InlineEncryptedKeyResolver.)
-              (org.opensaml.saml.saml2.encryption.EncryptedElementTypeEncryptedKeyResolver.)
-              (org.opensaml.xmlsec.encryption.support.SimpleRetrievalMethodEncryptedKeyResolver.)
-              (org.opensaml.xmlsec.encryption.support.SimpleKeyInfoReferenceEncryptedKeyResolver.))))))
+      (doto (org.opensaml.saml.saml2.encryption.Decrypter.
+             nil
+             (org.opensaml.xmlsec.keyinfo.impl.StaticKeyInfoCredentialResolver. credential)
+             ;; these resolvers are chained together so OpenSAML can look in different places around the assertion to
+             ;; find the encryption key.
+             (org.opensaml.xmlsec.encryption.support.ChainingEncryptedKeyResolver.
+              (list (org.opensaml.xmlsec.encryption.support.InlineEncryptedKeyResolver.)
+                    (org.opensaml.saml.saml2.encryption.EncryptedElementTypeEncryptedKeyResolver.)
+                    (org.opensaml.xmlsec.encryption.support.SimpleRetrievalMethodEncryptedKeyResolver.)
+                    (org.opensaml.xmlsec.encryption.support.SimpleKeyInfoReferenceEncryptedKeyResolver.))))
+        (.setRootInNewDocument true))))
 
   Object
   (->Decrypter [this]
-    (->Decrypter (->X509Credential this))))
+    (->Decrypter (->Credential this))))
+
+(extend-protocol SerializeXMLString
+  nil
+  (->xml-string [_] nil)
+
+  String
+  (->xml-string [this] this)
+
+  clojure.lang.IPersistentVector
+  (->xml-string [this]
+    (str
+     (h.page/xml-declaration "UTF-8")
+     (hiccup/html this)))
+
+  org.w3c.dom.Node
+  (->xml-string [this]
+    (let [transformer (doto (.. javax.xml.transform.TransformerFactory newInstance newTransformer)
+                        (.setOutputProperty javax.xml.transform.OutputKeys/ENCODING "UTF-8")
+                        (.setOutputProperty javax.xml.transform.OutputKeys/INDENT "yes")
+                        (.setOutputProperty "{http://xml.apache.org/xslt}indent-amount" "2"))
+          dom-source (javax.xml.transform.dom.DOMSource. this)]
+      (with-open [w (java.io.StringWriter.)]
+        (let [stream-result (javax.xml.transform.stream.StreamResult. w)]
+          (.transform transformer dom-source stream-result))
+        (.toString w))))
+
+  org.opensaml.core.xml.XMLObject
+  (->xml-string [this]
+    (->xml-string (->Element this))))

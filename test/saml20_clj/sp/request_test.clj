@@ -31,20 +31,20 @@
 
 (deftest get-idp-redirect-test
   (is (= {:status 302
-          :headers {"Location" (str (str "http://test.idp.metabase.com"
-                                         "?SAMLRequest=C3b09VEIcg0MdQ0OUXD3dw1W8HANcgUA"
-                                         "&RelayState=http%3A%2F%2Flocalhost%3A3000%2Ftest"))}
+          :headers {"Location" (str "https://idp.example.com"
+                                    "?SAMLRequest=C3b09VEIcg0MdQ0OUXD3dw1W8HANcgUA"
+                                    "&RelayState=http%3A%2F%2Fsp.example.com%2Fdemo1%2Findex.php%3Facs")}
           :body ""}
          (request/get-idp-redirect test/idp-uri
                                    "SAML REQUEST GOES HERE"
-                                   test/redirect-uri)))
+                                   test/target-uri)))
   (testing "Should handle URIs that already have query params in them"
     (is (= {:status 302
-            :headers {"Location" (str (str "http://test.idp.metabase.com"
-                                           "?x=100"
-                                           "&SAMLRequest=C3b09VEIcg0MdQ0OUXD3dw1W8HANcgUA"
-                                           "&RelayState=http%3A%2F%2Flocalhost%3A3000%2Ftest"))}
+            :headers {"Location" (str "https://idp.example.com"
+                                      "?x=100"
+                                      "&SAMLRequest=C3b09VEIcg0MdQ0OUXD3dw1W8HANcgUA"
+                                      "&RelayState=http%3A%2F%2Fsp.example.com%2Fdemo1%2Findex.php%3Facs")}
             :body ""}
            (request/get-idp-redirect (str test/idp-uri "?x=100")
                                      "SAML REQUEST GOES HERE"
-                                     test/redirect-uri)))))
+                                     test/target-uri)))))

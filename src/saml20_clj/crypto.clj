@@ -30,7 +30,7 @@
                                                    :or   {signature-algorithm        [:rsa :sha256]
                                                           canonicalization-algorithm :excl-omit-comments}}]
   (when-let [object (coerce/->SAMLObject object)]
-    (when-let [credential (coerce/->X509Credential credential)]
+    (when-let [credential (coerce/->Credential credential)]
       (let [signature (doto (.buildObject (org.opensaml.xmlsec.signature.impl.SignatureBuilder.))
                         (.setSigningCredential credential)
                         (.setSignatureAlgorithm (or (get-in signature-algorithms signature-algorithm)
@@ -44,8 +44,18 @@
           (org.opensaml.xmlsec.signature.support.Signer/signObject signature)
           element)))))
 
-(defn decrypt
-  ^org.opensaml.saml.saml2.core.Assertion [credential-or-decrypter ^org.opensaml.saml.saml2.core.EncryptedAssertion assertion]
-  (when assertion
-    (when-let [decrypter (coerce/->Decrypter credential-or-decrypter)]
-      (.decrypt decrypter assertion))))
+(defn decrypt! [sp-private-key element]
+  (when-let [sp-private-key (coerce/->PrivateKey sp-private-key)]
+    (when-let [element (coerce/->Element element)]
+      (com.onelogin.saml2.util.Util/decryptElement element sp-private-key))))
+
+(defn recursive-decrypt! [sp-private-key element]
+  (when-let [sp-private-key (coerce/->PrivateKey sp-private-key)]
+    (when-let [element (coerce/->Element element)]
+      (when (= (.getNodeName element) "saml:EncryptedAssertion")
+        (decrypt! sp-private-key element))
+      element
+      (doseq [i     (range (.. element getChildNodes getLength))
+              :let  [child (.. element getChildNodes (item i))]
+              :when (instance? org.w3c.dom.Element child)]
+        (recursive-decrypt! sp-private-key child)))))

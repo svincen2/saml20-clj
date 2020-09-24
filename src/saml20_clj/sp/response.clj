@@ -6,7 +6,8 @@
             [saml20-clj
              [coerce :as coerce]
              [crypto :as crypto]])
-  (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction Response SubjectConfirmation]))
+  (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction Response
+            SubjectConfirmation]))
 
 ;; this is here mostly as a convenience
 (defn ^Response parse-response
@@ -57,7 +58,7 @@
 
 ;; http://kevnls.blogspot.gr/2009/07/processing-saml-in-java-using-opensaml.html
 ;; http://stackoverflow.com/questions/9422545/decrypting-encrypted-assertion-using-saml-2-0-in-java-using-opensaml
-(defn assertion
+(defn Assertion->map
   "Returns the attributes and the 'audiences' for the given SAML assertion"
   [^Assertion assertion]
   (when assertion
@@ -70,7 +71,7 @@
                                                [(saml2-attr->name (.getName attribute)) ; Or (.getFriendlyName a) ??
                                                 (map #(-> ^org.opensaml.core.xml.XMLObject % .getDOM .getTextContent)
                                                      (.getAttributeValues attribute))]))
-          audiences                 (for [^AudienceRestriction restriction (-> assertion .getConditions .getAudienceRestrictions)
+          audiences                 (for [^AudienceRestriction restriction (.. assertion getConditions getAudienceRestrictions)
                                           ^Audience audience               (.getAudiences restriction)]
                                       (.getAudienceURI audience))]
       {:attrs        attrs
@@ -82,17 +83,20 @@
                       :not-on-or-after (c.coerce/to-timestamp (.getNotOnOrAfter subject-confirmation-data))
                       :recipient       (.getRecipient subject-confirmation-data)}})))
 
+(defn decrypt-response ^org.opensaml.saml.saml2.core.Response [response sp-private-key]
+  (let [element (coerce/->Element response)]
+    (crypto/recursive-decrypt! sp-private-key element)
+    (coerce/->Response element)))
+
+(defn opensaml-assertions
+  [response sp-private-key]
+  (some-> response (decrypt-response sp-private-key) .getAssertions not-empty))
+
 (defn assertions
   "Returns the assertions (encrypted or not) of a SAML Response object"
-  [response decrypter-or-sp-credential]
-  (when-let [response (coerce/->Response response)]
-    (let [decrypter  (coerce/->Decrypter decrypter-or-sp-credential)
-          assertions (concat (.getAssertions response)
-                             (when decrypter
-                               (map (partial crypto/decrypt decrypter)
-                                    (.getEncryptedAssertions response))))
-          props      (map assertion assertions)]
-      (assoc (response-status response) :assertions props))))
+  [response sp-private-key]
+  (when-let [assertions (opensaml-assertions response sp-private-key)]
+    (map Assertion->map assertions)))
 
 (defn- signed? [object]
   (when-let [object (coerce/->SAMLObject object)]
@@ -105,7 +109,7 @@
 (defn- assert-valid-signature
   [object credential]
   (when-let [signature (signature object)]
-    (when-let [credential (coerce/->X509Credential credential)]
+    (when-let [credential (coerce/->Credential credential)]
       ;; validate that the signature conforms to the SAML signature spec
       (.validate (org.opensaml.saml.security.impl.SAMLSignatureProfileValidator.) signature)
       ;; validate that the signature matches the IdP cert
@@ -114,15 +118,16 @@
 (defn validate-response-signature
   "Returns truthy if the IdP `response` is signed (either the message, or all assertions, or both message and all
   assertions), and the signature(s) are valid for the `idp-cert-str` (as a base-64 encoded string)."
-  [response idp-credential decrypter-or-sp-credential]
+  [response idp-public-key sp-private-key]
   (when-let [response (coerce/->Response response)]
-    (when-let [idp-credentail (coerce/->X509Credential idp-credential)]
+    (when-let [idp-credentail (coerce/->Credential idp-public-key)]
       (try
-        (assert-valid-signature response idp-credential)
-        (doseq [assertion (assertions response decrypter-or-sp-credential)]
-          (assert-valid-signature assertion idp-credential))
-        (or (signed? response)
-            (every? signed? (.getAssertions response)))
+        (assert-valid-signature response idp-public-key)
+        (let [assertions (opensaml-assertions response sp-private-key)]
+          (doseq [assertion assertions]
+            (assert-valid-signature assertion idp-public-key))
+          (or (signed? response)
+              (every? signed? assertions)))
         (catch org.opensaml.xmlsec.signature.support.SignatureException e
           (log/error e "Signature NOT valid")
           false)))))

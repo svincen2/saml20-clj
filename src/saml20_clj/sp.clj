@@ -23,7 +23,7 @@
 
  [response
   parse-response
-  parse-saml-resp-status
-  #_parse-saml-assertion
-  saml-resp->assertions
-  validate-saml-response-signature])
+  decrypt-response
+  response-status
+  assertions
+  validate-response-signature])

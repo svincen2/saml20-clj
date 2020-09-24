@@ -22,7 +22,7 @@
                                  :password test/keystore-password
                                  :alias "sp"}))
     (testing "Should be able to get a private key from X509Credential"
-      (is-key-with-fingerprint? (coerce/->X509Credential test/sp-cert test/sp-private-key)))))
+      (is-key-with-fingerprint? (coerce/->Credential test/sp-cert test/sp-private-key)))))
 
 (def ^:private test-certificate-str-1
   "MIIDsjCCApqgAwIBAgIGAWtM1OOxMA0GCSqGSIb3DQEBCwUAMIGZMQswCQYDVQQGEwJVUzETMBEG
@@ -124,31 +124,26 @@ c7tL1QjbfAUHAQYwmHkWgPP+T2wAv0pOt36GgMCM
   {:public  (key-fingerprint (.getPublicKey credential))
    :private (key-fingerprint (.getPrivateKey credential))})
 
-(deftest ->X509Credential-test
+(deftest ->Credential-test
   (let [sp-fingerprints  {:public  "6e104aaa6daccb9c8f2b4d692441f3a5"
                           :private "af284d1f7bfa789c787f689a95604d31"}
         idp-fingerprints {:public "b2648dc4aa28760eaf33c789d58ba262", :private nil}]
     (testing "Should be able to get an X509Credential from Strings"
       (is (= sp-fingerprints
-             (x509-credential-fingerprints (coerce/->X509Credential test/sp-cert test/sp-private-key)))))
+             (x509-credential-fingerprints (coerce/->Credential test/sp-cert test/sp-private-key)))))
     (testing "Should accept a tuple of [public-key private-key]"
       (is (= sp-fingerprints
-             (x509-credential-fingerprints (coerce/->X509Credential [test/sp-cert test/sp-private-key]))))
+             (x509-credential-fingerprints (coerce/->Credential [test/sp-cert test/sp-private-key]))))
       (is (= idp-fingerprints
-             (x509-credential-fingerprints (coerce/->X509Credential [test/idp-cert])))))
+             (x509-credential-fingerprints (coerce/->Credential [test/idp-cert])))))
     (testing "Should be able to get X509Credential from a keystore"
       (testing "public only"
         (is (= idp-fingerprints
-               (x509-credential-fingerprints (coerce/->X509Credential {:filename test/keystore-filename
+               (x509-credential-fingerprints (coerce/->Credential {:filename test/keystore-filename
                                                                        :password test/keystore-password
                                                                        :alias    "idp"})))))
       (testing "public + private"
         (is (= sp-fingerprints
-               (x509-credential-fingerprints (coerce/->X509Credential {:filename test/keystore-filename
+               (x509-credential-fingerprints (coerce/->Credential {:filename test/keystore-filename
                                                                        :password test/keystore-password
                                                                        :alias    "sp"}))))))))
-
-(deftest ->Decrypter-test
-  (testing "Should be able to get a Decrypter from a credential"
-    (is (instance? org.opensaml.saml.saml2.encryption.Decrypter
-                   (coerce/->Decrypter [test/sp-cert test/sp-private-key])))))

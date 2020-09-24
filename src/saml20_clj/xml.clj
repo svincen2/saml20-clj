@@ -5,12 +5,12 @@
 
 (defn document-builder
   ^DocumentBuilder []
-  (let [doc (DocumentBuilderFactory/newInstance)]
-    (.setNamespaceAware doc true)
-    (.setFeature doc "http://xml.org/sax/features/external-parameter-entities" false)
-    (.setFeature doc "http://apache.org/xml/features/nonvalidating/load-external-dtd" false)
-    (.setExpandEntityReferences doc false)
-    (.newDocumentBuilder doc)))
+  (.newDocumentBuilder
+   (doto (DocumentBuilderFactory/newInstance)
+     (.setNamespaceAware true)
+     (.setFeature "http://xml.org/sax/features/external-parameter-entities" false)
+     (.setFeature "http://apache.org/xml/features/nonvalidating/load-external-dtd" false)
+     (.setExpandEntityReferences false))))
 
 (defn str->xmldoc
   "Parse a string into an XML `Document`."

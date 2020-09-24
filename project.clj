@@ -21,18 +21,17 @@
   [["opensaml" "https://build.shibboleth.net/nexus/content/repositories/releases/"]]
 
   :dependencies
-  [[org.clojure/data.xml "0.0.8"]
-   [org.clojure/data.zip "1.0.0"]
-   [org.clojure/tools.logging "1.1.0"]
+  [[org.clojure/tools.logging "1.1.0"]
    [clj-time "0.15.2"]
    [commons-io/commons-io "2.8.0"]
    [hiccup "1.0.5"]
-   [org.apache.santuario/xmlsec "2.2.0"]
+   #_[org.apache.santuario/xmlsec "2.2.0"]
    [org.opensaml/opensaml-core "3.4.5"]
    [org.opensaml/opensaml-saml-api "3.4.5"]
    [org.opensaml/opensaml-saml-impl "3.4.5"]
    [org.opensaml/opensaml-xmlsec-api "3.4.5"]
    [org.opensaml/opensaml-xmlsec-impl "3.4.5"]
+   [com.onelogin/java-saml "2.5.0"]
    [potemkin "0.4.5"]
    [ring/ring-codec "1.1.2"]]           ; for the url-encode codec
 
@@ -78,7 +77,7 @@
    ;; Using Cam's fork of Cloverage until 1.2.1 of the main repo is out. Once that's released we can switch back.
    {:dependencies [[camsaul/cloverage "1.2.1.1"]]
     :plugins      [[camsaul/lein-cloverage  "1.2.1.1"]]
-    :cloverage    {:fail-threshold 20}}}
+    :cloverage    {:fail-threshold 76}}}
 
   :deploy-repositories
   [["clojars"
