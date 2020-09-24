@@ -1,8 +1,9 @@
 (ns saml20-clj.sp.response-test
   (:require [clojure.test :refer :all]
-            [saml20-clj.sp.response :as response]
-            [saml20-clj.coerce :as coerce]
-            [saml20-clj.test :as test]))
+            [saml20-clj
+             [coerce :as coerce]
+             [test :as test]]
+            [saml20-clj.sp.response :as response]))
 
 (deftest response-status-test
   (doseq [{:keys [response], :as response-map} (test/responses)]
@@ -39,12 +40,16 @@
    (validate-signature response test/idp-cert test/sp-private-key))
 
   ([response idp-cert sp-credentials]
-   (response/validate-response-signature
-    response
-    idp-cert
-    sp-credentials)))
+   (try
+     (response/assert-valid-signatures
+      response
+      idp-cert
+      sp-credentials)
+     true
+     (catch Throwable e
+       false))))
 
-(deftest validate-response-signature-testn
+(deftest assert-valid-signatures-test
   (testing "unsigned responses should fail\n"
     (doseq [{:keys [response], :as response-map} (test/responses)
             :when                                (not (test/signed? response-map))]
@@ -53,7 +58,7 @@
                (validate-signature response))))))
   (testing "valid signed responses should pass\n"
     (doseq [{:keys [response], :as response-map} (test/responses)
-            :when                               (test/signed? response-map)]
+            :when                                (test/signed? response-map)]
       (testing (test/describe-response-map response-map)
         (testing "\nsignature should be valid when checking against IdP cert"
           (is (= true
@@ -63,7 +68,7 @@
                  ;; using SP cert for both instead
                  (validate-signature response test/sp-cert {:filename test/keystore-filename
                                                             :password test/keystore-password
-                                                            :alias "sp"}))))))))
+                                                            :alias    "sp"}))))))))
 
 ;;
 ;; Subject Confirmation Data Verifications
@@ -108,8 +113,7 @@
                    (#'response/assert-valid-address-attribute a "192.168.1.1"))))
           (testing "\nchecking address attribute (bad user agent address)"
             (is (= false
-                   (#'response/assert-valid-address-attribute a "im.a.bad.man"))))
-          ))))
+                   (#'response/assert-valid-address-attribute a "im.a.bad.man"))))))))
 
   (testing "invalid confirmation data should fail\n"
     (doseq [{:keys [response], :as response-map} (test/responses)
@@ -130,7 +134,4 @@
                    (#'response/assert-valid-in-response-to-attribute a "bogus_id" true))))
           (testing "\nchecking in-response-to attribute (unsolicited)"
             (is (= false
-                   (#'response/assert-valid-in-response-to-attribute a "bogus_id" false))))
-          ))))
-
-  )
+                   (#'response/assert-valid-in-response-to-attribute a "bogus_id" false)))))))))
