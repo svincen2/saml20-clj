@@ -31,6 +31,9 @@ sense. Dox will be updated in the near future once the 2.0.0 release is finalize
    *  Support for XML signing with SHA-256 instead of SHA-1, which is required by ADFS by default (via [k2n/saml20-clj](https://github.com/k2n/saml20-clj))
    *  Support for Clojure 1.10+
    *  Support for base-64 encodings that contain newlines
+   *  Removed lots of dependencies on other libraries
+   *  Reorganized code
+   *  Removed tons of duplicate/unnecessary, untested code
 
 ## License
 
