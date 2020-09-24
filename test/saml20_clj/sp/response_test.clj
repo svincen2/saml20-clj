@@ -3,39 +3,64 @@
             [saml20-clj.sp.response :as response]
             [saml20-clj.test :as test]))
 
-(deftest parse-saml-resp-status-test
-  (is (= {:inResponseTo "_1"
-          :status       "urn:oasis:names:tc:SAML:2.0:status:Success"
-          :success?     true
-          :version      "2.0"
-          :issueInstant #inst "2018-07-05T18:02:53.000000000-00:00"
-          :destination  "http://localhost:3000/auth/sso"}
-         (response/parse-saml-resp-status (response/xml-string->saml-resp @test/example-response-unsigned)))))
+(deftest response-status-test
+  (doseq [{:keys [response], :as response-map} test/responses]
+    (testing (test/describe-response-map response-map)
+      (is (= {:in-response-to "ONELOGIN_4fee3b046395c4e751011e97f8900b5273d56685"
+              :status         "urn:oasis:names:tc:SAML:2.0:status:Success"
+              :success?       true
+              :version        "2.0"
+              :issue-instant  #inst "2014-07-17T01:01:48.000000000-00:00"
+              :destination    "http://sp.example.com/demo1/index.php?acs"}
+             (response/response-status response))))))
 
-(deftest saml-resp->assertions-test
-  (is (= {:inResponseTo "_1"
-          :status       "urn:oasis:names:tc:SAML:2.0:status:Success"
-          :success?     true
-          :version      "2.0"
-          :issueInstant #inst "2018-07-05T18:02:53.000000000-00:00"
-          :destination  "http://localhost:3000/auth/sso"
-          :assertions   [{:attrs        {"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier" ["auth0|5b0dd0185d7d1617fd8065b5"]
-                                         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"   ["cam@example.com"]
-                                         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"           ["Cam Saul"]
-                                         "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn"            ["cam@example.com"]}
-                          :audiences    ["ExampleClient"]
-                          :name-id      {:value  "auth0|5b0dd0185d7d1617fd8065b5"
-                                         :format "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified"}
-                          :confirmation {:in-response-to  "_1"
-                                         :not-before      nil
-                                         :not-on-or-after #inst "2018-07-05T19:02:53.262000000-00:00"
-                                         :recipient       "http://localhost:3000/auth/sso"}}]}
-         (response/saml-resp->assertions (response/xml-string->saml-resp @test/example-response-unsigned) nil))))
+(deftest assertions-test
+  (doseq [{:keys [response], :as response-map} test/responses]
+    (testing (test/describe-response-map response-map)
+      (is (= {:in-response-to "ONELOGIN_4fee3b046395c4e751011e97f8900b5273d56685"
+              :status         "urn:oasis:names:tc:SAML:2.0:status:Success"
+              :success?       true
+              :version        "2.0"
+              :issue-instant  #inst "2014-07-17T01:01:48.000000000-00:00"
+              :destination    "http://sp.example.com/demo1/index.php?acs"
+              :assertions     [{:attrs        {"uid"                  ["test"]
+                                               "mail"                 ["test@example.com"]
+                                               "eduPersonAffiliation" ["users" "examplerole1"]}
+                                :audiences    ["sp.example.com"]
+                                :name-id      {:value  "_ce3d2948b4cf20146dee0a0b3dd6f69b6cf86f62d7"
+                                               :format "urn:oasis:names:tc:SAML:2.0:nameid-format:transient"}
+                                :confirmation {:in-response-to  "ONELOGIN_4fee3b046395c4e751011e97f8900b5273d56685"
+                                               :not-before      nil
+                                               :not-on-or-after #inst "2024-01-18T06:21:48.000000000-00:00"
+                                               :recipient       "http://sp.example.com/demo1/index.php?acs"}}]}
+             (response/assertions response [test/sp-cert test/sp-private-key]))))))
 
-(deftest validate-saml-response-signature-test
-  (testing "Should return false if response doesn't have a signature")
-  (testing "Should return false if signature doesn't match the IdP certificate")
-  (testing "Should return false if signature doesn't match the message")
-  (testing "should return true if the signature matches the message and IdP certificate"))
+(defn- validate-signature
+  ([response]
+   (validate-signature response test/idp-cert))
 
-;; TODO -- validate the conditions before/notonorafter
+  ([response idp-cert sp-cert]
+   (response/validate-response-signature
+    response
+    idp-cert
+    sp-cert)))
+
+(deftest validate-response-signature-test
+  (testing "unsigned responses should fail\n"
+    (doseq [{:keys [response], :as response-map} test/responses
+            :when                                (not (test/signed? response-map))]
+      (testing (test/describe-response-map response-map)
+        (is (= false
+               (validate-signature response))))))
+  (testing "valid signed responses should pass\n"
+    (doseq [{:keys [response] :as response-map} test/responses
+            :when                               (test/signed? response-map)]
+      (testing (test/describe-response-map response-map)
+        (assert (string? response))
+        (testing "\nsignature should be valid when checking against IdP cert"
+          (is (= true
+                 (validate-signature response))))
+        (testing "\nsignature should be invalid when checking against the wrong cert"
+          (is (= false
+                 ;; using SP cert for both instead
+                 (validate-signature response test/sp-cert test/sp-cert))))))))

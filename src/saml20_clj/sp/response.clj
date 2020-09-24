@@ -4,81 +4,163 @@
   (:require [clj-time.coerce :as c.coerce]
             [clojure.tools.logging :as log]
             [saml20-clj
-             [shared :as shared]
-             [xml :as saml-xml]])
-  (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction
-            EncryptedAssertion Response SubjectConfirmation]
-           org.opensaml.saml.saml2.encryption.Decrypter))
+             [coerce :as coerce]
+             [crypto :as crypto]])
+  (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction Response SubjectConfirmation]))
 
-(defn xml-string->saml-resp
-  "Parses a SAML response (XML string) from IdP and returns the corresponding (Open)SAML Response object"
-  ^Response [^String xml-string]
-  (let [xmldoc               (.getDocumentElement (saml-xml/str->xmldoc xml-string))
-        unmarshaller-factory (org.opensaml.core.xml.config.XMLObjectProviderRegistrySupport/getUnmarshallerFactory)
-        unmarshaller         (.getUnmarshaller unmarshaller-factory xmldoc)]
-    (.unmarshall unmarshaller xmldoc)))
+;; this is here mostly as a convenience
+(defn ^Response parse-response
+  "Parse/coerce something representing such as a String or Java object `xml` into a OpenSAML `Response`."
+  [xml]
+  (coerce/->Response xml))
 
-(defn parse-saml-resp-status
+(defn response-status
   "Parses and returns information about the status (i.e. successful or not), the version, addressing info etc. of the
   SAML response
 
   Check the javadoc of OpenSAML at:
 
   https://build.shibboleth.net/nexus/service/local/repositories/releases/archive/org/opensaml/opensaml/2.5.3/opensaml-2.5.3-javadoc.jar/!/index.html"
-  [^Response saml-resp]
-  (let [status (.. saml-resp getStatus getStatusCode getValue)]
-    {:inResponseTo (.getInResponseTo saml-resp)
-     :status       status
-     :success?     (= status org.opensaml.saml.saml2.core.StatusCode/SUCCESS)
-     :version      (.. saml-resp getVersion toString)
-     :issueInstant (c.coerce/to-timestamp (.getIssueInstant saml-resp))
-     :destination  (.getDestination saml-resp)}))
+  [response]
+  (when-let [response (coerce/->Response response)]
+    (let [status (.. response getStatus getStatusCode getValue)]
+      {:in-response-to (.getInResponseTo response)
+       :status         status
+       :success?       (= status org.opensaml.saml.saml2.core.StatusCode/SUCCESS)
+       :version        (.. response getVersion toString)
+       :issue-instant  (c.coerce/to-timestamp (.getIssueInstant response))
+       :destination    (.getDestination response)})))
+
+;; https://www.purdue.edu/apps/account/docs/Shibboleth/Shibboleth_information.jsp
+;;  Or
+;; https://wiki.library.ucsf.edu/display/IAM/EDS+Attributes
+(def saml2-attr->name
+  (let [names {"urn:oid:0.9.2342.19200300.100.1.1" "uid"
+               "urn:oid:0.9.2342.19200300.100.1.3" "mail"
+               "urn:oid:2.16.840.1.113730.3.1.241" "displayName"
+               "urn:oid:2.5.4.3"                   "cn"
+               "urn:oid:2.5.4.4"                   "sn"
+               "urn:oid:2.5.4.12"                  "title"
+               "urn:oid:2.5.4.20"                  "phone"
+               "urn:oid:2.5.4.42"                  "givenName"
+               "urn:oid:2.5.6.8"                   "organizationalRole"
+               "urn:oid:2.16.840.1.113730.3.1.3"   "employeeNumber"
+               "urn:oid:2.16.840.1.113730.3.1.4"   "employeeType"
+               "urn:oid:1.3.6.1.4.1.5923.1.1.1.1"  "eduPersonAffiliation"
+               "urn:oid:1.3.6.1.4.1.5923.1.1.1.2"  "eduPersonNickname"
+               "urn:oid:1.3.6.1.4.1.5923.1.1.1.6"  "eduPersonPrincipalName"
+               "urn:oid:1.3.6.1.4.1.5923.1.1.1.9"  "eduPersonScopedAffiliation"
+               "urn:oid:1.3.6.1.4.1.5923.1.1.1.10" "eduPersonTargetedID"
+               "urn:oid:1.3.6.1.4.1.5923.1.6.1.1"  "eduCourseOffering"}]
+    (fn [attr-oid]
+      (get names attr-oid attr-oid))))
 
 ;; http://kevnls.blogspot.gr/2009/07/processing-saml-in-java-using-opensaml.html
 ;; http://stackoverflow.com/questions/9422545/decrypting-encrypted-assertion-using-saml-2-0-in-java-using-opensaml
-(defn parse-saml-assertion
+(defn assertion
   "Returns the attributes and the 'audiences' for the given SAML assertion"
   [^Assertion assertion]
-  (let [statements                (.getAttributeStatements assertion)
-        subject                   (.getSubject assertion)
-        subject-confirmation-data (.getSubjectConfirmationData ^SubjectConfirmation (first (.getSubjectConfirmations subject)))
-        name-id                   (.getNameID subject)
-        attrs                     (into {} (for [^AttributeStatement statement statements
-                                                 ^Attribute attribute          (.getAttributes statement)]
-                                             [(shared/saml2-attr->name (.getName attribute)) ; Or (.getFriendlyName a) ??
-                                              (map #(-> ^org.opensaml.core.xml.XMLObject % .getDOM .getTextContent)
-                                                   (.getAttributeValues attribute))]))
-        audiences                 (for [^AudienceRestriction restriction (-> assertion .getConditions .getAudienceRestrictions)
-                                        ^Audience audience               (.getAudiences restriction)]
-                                    (.getAudienceURI audience))]
-    {:attrs        attrs
-     :audiences    audiences
-     :name-id      {:value  (some-> name-id .getValue)
-                    :format (some-> name-id .getFormat)}
-     :confirmation {:in-response-to  (.getInResponseTo subject-confirmation-data)
-                    :not-before      (c.coerce/to-timestamp (.getNotBefore subject-confirmation-data))
-                    :not-on-or-after (c.coerce/to-timestamp (.getNotOnOrAfter subject-confirmation-data))
-                    :recipient       (.getRecipient subject-confirmation-data)}}))
+  (when assertion
+    (let [statements                (.getAttributeStatements assertion)
+          subject                   (.getSubject assertion)
+          subject-confirmation-data (.getSubjectConfirmationData ^SubjectConfirmation (first (.getSubjectConfirmations subject)))
+          name-id                   (.getNameID subject)
+          attrs                     (into {} (for [^AttributeStatement statement statements
+                                                   ^Attribute attribute          (.getAttributes statement)]
+                                               [(saml2-attr->name (.getName attribute)) ; Or (.getFriendlyName a) ??
+                                                (map #(-> ^org.opensaml.core.xml.XMLObject % .getDOM .getTextContent)
+                                                     (.getAttributeValues attribute))]))
+          audiences                 (for [^AudienceRestriction restriction (-> assertion .getConditions .getAudienceRestrictions)
+                                          ^Audience audience               (.getAudiences restriction)]
+                                      (.getAudienceURI audience))]
+      {:attrs        attrs
+       :audiences    audiences
+       :name-id      {:value  (some-> name-id .getValue)
+                      :format (some-> name-id .getFormat)}
+       :confirmation {:in-response-to  (.getInResponseTo subject-confirmation-data)
+                      :not-before      (c.coerce/to-timestamp (.getNotBefore subject-confirmation-data))
+                      :not-on-or-after (c.coerce/to-timestamp (.getNotOnOrAfter subject-confirmation-data))
+                      :recipient       (.getRecipient subject-confirmation-data)}})))
 
-(defn saml-resp->assertions
+(defn assertions
   "Returns the assertions (encrypted or not) of a SAML Response object"
-  [^Response saml-resp ^Decrypter decrypter]
-  (let [assertions (concat (.getAssertions saml-resp)
-                           (when decrypter
-                             (map #(.decrypt decrypter ^EncryptedAssertion %)
-                                  (.getEncryptedAssertions saml-resp))))
-        props      (map parse-saml-assertion assertions)]
-    (assoc (parse-saml-resp-status saml-resp)
-           :assertions props)))
+  [response decrypter-or-sp-credential]
+  (when-let [response (coerce/->Response response)]
+    (let [decrypter  (coerce/->Decrypter decrypter-or-sp-credential)
+          assertions (concat (.getAssertions response)
+                             (when decrypter
+                               (map (partial crypto/decrypt decrypter)
+                                    (.getEncryptedAssertions response))))
+          props      (map assertion assertions)]
+      (assoc (response-status response) :assertions props))))
 
-(defn validate-saml-response-signature
-  "Checks (if exists) the signature of SAML Response given the IdP certificate"
-  [^Response saml-resp ^String idp-cert]
-  (when-let [signature (.getSignature saml-resp)]
-    (let [public-creds (org.opensaml.security.x509.BasicX509Credential. (shared/certificate-x509 idp-cert))]
+(defn- signed? [object]
+  (when-let [object (coerce/->SAMLObject object)]
+    (.isSigned object)))
+
+(defn- signature [object]
+  (when-let [object (coerce/->SAMLObject object)]
+    (.getSignature object)))
+
+(defn- assert-valid-signature
+  [object credential]
+  (when-let [signature (signature object)]
+    (when-let [credential (coerce/->X509Credential credential)]
+      ;; validate that the signature conforms to the SAML signature spec
+      (.validate (org.opensaml.saml.security.impl.SAMLSignatureProfileValidator.) signature)
+      ;; validate that the signature matches the IdP cert
+      (org.opensaml.xmlsec.signature.support.SignatureValidator/validate signature credential))))
+
+(defn validate-response-signature
+  "Returns truthy if the IdP `response` is signed (either the message, or all assertions, or both message and all
+  assertions), and the signature(s) are valid for the `idp-cert-str` (as a base-64 encoded string)."
+  [response idp-credential decrypter-or-sp-credential]
+  (when-let [response (coerce/->Response response)]
+    (when-let [idp-credentail (coerce/->X509Credential idp-credential)]
       (try
-        (org.opensaml.xmlsec.signature.support.SignatureValidator/validate signature public-creds)
-        true
+        (assert-valid-signature response idp-credential)
+        (doseq [assertion (assertions response decrypter-or-sp-credential)]
+          (assert-valid-signature assertion idp-credential))
+        (or (signed? response)
+            (every? signed? (.getAssertions response)))
         (catch org.opensaml.xmlsec.signature.support.SignatureException e
           (log/error e "Signature NOT valid")
           false)))))
+
+;; TODO
+(defn validate [^Response response ^String idp-cert-str]
+  "From the SAML spec: https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf
+
+  Regardless of the SAML binding used, the service provider MUST do the following:
+
+  • Verify any signatures present on the assertion(s) or the response
+
+  • Verify that the Recipient attribute in any bearer <SubjectConfirmationData> matches the
+  assertion consumer service URL to which the <Response> or artifact was delivered
+
+  • Verify that the NotOnOrAfter attribute in any bearer <SubjectConfirmationData> has not
+  passed, subject to allowable clock skew between the providers
+
+  • Verify that the InResponseTo attribute in the bearer <SubjectConfirmationData> equals the ID
+  of its original <AuthnRequest> message, unless the response is unsolicited (see Section 4.1.5 ), in
+  which case the attribute MUST NOT be present
+
+  • Verify that any assertions relied upon are valid in other respects
+
+  • If any bearer <SubjectConfirmationData> includes an Address attribute, the service provider
+  MAY check the user agent's client address against it.
+
+  • Any assertion which is not valid, or whose subject confirmation requirements cannot be met SHOULD
+  be discarded and SHOULD NOT be used to establish a security context for the principal.
+
+  • If an <AuthnStatement> used to establish a security context for the principal contains a
+  SessionNotOnOrAfter attribute, the security context SHOULD be discarded once this time is
+  reached, unless the service provider reestablishes the principal's identity by repeating the use of this
+  profile.")
+
+;; TODO
+#_(def status-code-success "urn:oasis:names:tc:SAML:2.0:status:Success")
+
+#_(defn saml-successful?
+  [id-str]
+  (= id-str status-code-success))

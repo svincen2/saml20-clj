@@ -3,22 +3,14 @@
   namespaces, but vars are made available here via Potemkin."
   (:require [potemkin :as p]
             [saml20-clj.sp
-             [factories :as factories]
              [request :as request]
-             [response :as response]
-             [response-map :as response-map]]))
+             [response :as response]]))
 
 (comment
-  factories/keep-me
   request/keep-me
-  response/keep-me
-  response-map/keep-me)
+  response/keep-me)
 
 (p/import-vars
- [factories
-  make-saml-decrypter
-  make-saml-signer]
-
  [request
   bump-saml-id-timeout!
   create-request
@@ -30,12 +22,8 @@
   prune-timed-out-ids!]
 
  [response
-  parse-saml-assertion
+  parse-response
   parse-saml-resp-status
+  #_parse-saml-assertion
   saml-resp->assertions
-  validate-saml-response-signature
-  xml-string->saml-resp]
-
- [response-map
-  parse-saml-response
-  response->map])
+  validate-saml-response-signature])

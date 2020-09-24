@@ -1,63 +1,30 @@
-(ns saml20-clj.shared-test
+(ns saml20-clj.coerce-test
   (:require [clojure.test :refer :all]
-            [saml20-clj.shared :as shared])
-  (:import java.security.PublicKey
-           org.apache.commons.io.IOUtils))
+            [saml20-clj
+             [coerce :as coerce]
+             [test :as test]]))
 
-(def ^:private test-string
-  "Th1s 15 50m3 s7r1ng w17h 13773r5 and numb3rs!")
+(defn- key-fingerprint [^java.security.Key k]
+  (when k
+    (org.apache.commons.codec.digest.DigestUtils/md5Hex (.getEncoded k))))
 
-(def ^:private test-xml
-  "<tag1 hasmore=\"1\"><tag2 hasmore=\"1\"><tag3>foobar</tag3></tag2><tag4>inter arma enim silent leges</tag4></tag1>")
+(deftest ->PrivateKey-test
+  (is (= nil (coerce/->PrivateKey nil)))
+  (letfn [(is-key-with-fingerprint? [input]
+            (let [k (coerce/->PrivateKey input)]
+              (is (instance? java.security.PrivateKey k))
+              (is (= "af284d1f7bfa789c787f689a95604d31"
+                     (key-fingerprint k)))))]
+    (testing "Should be able to get a private key from base-64-encoded string"
+      (is-key-with-fingerprint? test/sp-private-key))
+    (testing "Should be able to get a private key from a Java keystore"
+      (is-key-with-fingerprint? {:filename test/keystore-filename
+                                 :password test/keystore-password
+                                 :alias "sp"}))
+    (testing "Should be able to get a private key from X509Credential"
+      (is-key-with-fingerprint? (coerce/->X509Credential test/sp-cert test/sp-private-key)))))
 
-(def ^:private test-xml-response
-  [{:tag     :tag1
-    :attrs   {:hasmore "1"}
-    :content [{:tag     :tag2
-               :attrs   {:hasmore "1"}
-               :content [{:tag     :tag3
-                          :attrs   nil
-                          :content ["foobar"]}]}
-              {:tag     :tag4
-               :attrs   nil
-               :content ["inter arma enim silent leges"]}]}
-   nil])
-
-(deftest bytes->str-test
-  (testing "Testing string to stream and stream to string transformations."
-    (is (= test-string
-           (shared/bytes->str (with-open [is (shared/str->inputstream test-string)]
-                                (IOUtils/toByteArray is))))))
-  (testing "make sure we can encode string -> bytes -> hex"
-    (is (= "41424358595a"
-           (-> "ABCXYZ" shared/str->bytes shared/bytes->hex)))))
-
-(deftest parse-xml-str-test
-  (testing "Testing xml parsing from a string."
-    (is (= test-xml-response
-           (shared/parse-xml-str test-xml)))))
-
-(deftest base-64-test
-  (testing "make sure conversion to/from base 64 works as expected"
-    (is (= "QUJDREVG"
-           (shared/str->base64 "ABCDEF")))
-    (is (= "ABCDEF"
-           (shared/base64->str "QUJDREVG")))))
-
-(deftest base-64-deflate-inflate-test
-  (testing "make sure conversion to/from base 64 w/ DEFLATE compression works as expected"
-    (is (= "c3RydnF1AwA="
-           (shared/str->deflate->base64 "ABCDEF")))
-    (is (= "ABCDEF"
-           (shared/base64->inflate->str "c3RydnF1AwA="))))
-
-  (testing "we should be able to decode base-64 stuff that contains newlines in it"
-    (is (= "ABCDEF"
-           (shared/base64->inflate->str "c3Ry\ndnF1\r\nAwA=")))
-    (is (= "ABCDEF"
-           (shared/base64->str "QUJDR\nEV\r\nG")))))
-
-(def ^:private test-certificate-string-01
+(def ^:private test-certificate-str-1
   "MIIDsjCCApqgAwIBAgIGAWtM1OOxMA0GCSqGSIb3DQEBCwUAMIGZMQswCQYDVQQGEwJVUzETMBEG
 A1UECAwKQ2FsaWZvcm5pYTEWMBQGA1UEBwwNU2FuIEZyYW5jaXNjbzENMAsGA1UECgwET2t0YTEU
 MBIGA1UECwwLU1NPUHJvdmlkZXIxGjAYBgNVBAMMEW1ldGFiYXNlLXZpY3RvcmlhMRwwGgYJKoZI
@@ -76,7 +43,7 @@ PcmkewOYEf71Y/sBF0/vRJev5n3upo2nW9RzUz9ptAtWn7EoLsN+grcohJpygj7jiJmbicxblNqF
 uvuZkzz+X+qt2W/1mbVDyuIwsvUQOeRbpM+xv11dxheLRKt3kB8Gf6kqd8EjBtHmMFL8s4fdHyfM
 eRzAWU6exmsx49oEvw5LrBSTJ97ekvVFfrEASyd96sgeV2Nl0No=")
 
-(def ^:private test-certificate-string-02
+(def ^:private test-certificate-str-2
   "-----BEGIN CERTIFICATE-----
 MIICEjCCAXsCAg36MA0GCSqGSIb3DQEBBQUAMIGbMQswCQYDVQQGEwJKUDEOMAwG
 A1UECBMFVG9reW8xEDAOBgNVBAcTB0NodW8ta3UxETAPBgNVBAoTCEZyYW5rNERE
@@ -92,7 +59,7 @@ AQABMA0GCSqGSIb3DQEBBQUAA4GBABS2TLuBeTPmcaTaUW/LCB2NYOy8GMdzR1mx
 Hn+GmxZA
 -----END CERTIFICATE-----")
 
-(def ^:private test-certificate-string-03
+(def ^:private test-certificate-str-3
   "-----BEGIN CERTIFICATE-----
 MIIC2jCCAkMCAg38MA0GCSqGSIb3DQEBBQUAMIGbMQswCQYDVQQGEwJKUDEOMAwG
 A1UECBMFVG9reW8xEDAOBgNVBAcTB0NodW8ta3UxETAPBgNVBAoTCEZyYW5rNERE
@@ -112,7 +79,7 @@ rGhLV1pRG9frwDFshqD2Vaj4ENBCBh6UpeBop5+285zQ4SI7q4U9oSebUDJiuOx6
 +tZ9KynmrbJpTSi0+BM=
 -----END CERTIFICATE-----")
 
-(def ^:private test-certificate-string-04
+(def ^:private test-certificate-str-4
   "-----BEGIN CERTIFICATE-----
 MIID2jCCA0MCAg39MA0GCSqGSIb3DQEBBQUAMIGbMQswCQYDVQQGEwJKUDEOMAwG
 A1UECBMFVG9reW8xEDAOBgNVBAcTB0NodW8ta3UxETAPBgNVBAoTCEZyYW5rNERE
@@ -137,16 +104,51 @@ l8z5Ek8dC4NNpfpcZc/teT1WqiO2wnpGHjgMDuDL1mxCZNL422jHpiPWkWp3AuDI
 c7tL1QjbfAUHAQYwmHkWgPP+T2wAv0pOt36GgMCM
 -----END CERTIFICATE-----")
 
-(deftest parse-certificate-test
-  (testing "make sure we can parse a certificate, no armor"
-    (is (instance? PublicKey
-                   (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-01)))))
-  (testing "make sure we can parse a certificate with armor 512b key"
-    (is (instance? PublicKey
-                   (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-02)))))
-  (testing "make sure we can parse a certificate with armor 2048b key"
-    (is (instance? PublicKey
-                   (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-03)))))
-  (testing "make sure we can parse a certificate with armor 4096b key"
-    (is (instance? PublicKey
-                   (shared/jcert->public-key (shared/certificate-x509 test-certificate-string-04))))))
+(deftest ->X509Certificate-test
+  (testing "from String"
+    (testing "make sure we can parse a certificate, no armor"
+      (coerce/->X509Certificate test-certificate-str-1)
+      (is (instance? java.security.cert.X509Certificate
+                     (coerce/->X509Certificate test-certificate-str-1))))
+    (testing "make sure we can parse a certificate with armor 512b key"
+      (is (instance? java.security.cert.X509Certificate
+                     (coerce/->X509Certificate test-certificate-str-2))))
+    (testing "make sure we can parse a certificate with armor 2048b key"
+      (is (instance? java.security.cert.X509Certificate
+                     (coerce/->X509Certificate test-certificate-str-3))))
+    (testing "make sure we can parse a certificate with armor 4096b key"
+      (is (instance? java.security.cert.X509Certificate
+                     (coerce/->X509Certificate test-certificate-str-4))))))
+
+(defn- x509-credential-fingerprints [^org.opensaml.security.x509.X509Credential credential]
+  {:public  (key-fingerprint (.getPublicKey credential))
+   :private (key-fingerprint (.getPrivateKey credential))})
+
+(deftest ->X509Credential-test
+  (let [sp-fingerprints  {:public  "6e104aaa6daccb9c8f2b4d692441f3a5"
+                          :private "af284d1f7bfa789c787f689a95604d31"}
+        idp-fingerprints {:public "b2648dc4aa28760eaf33c789d58ba262", :private nil}]
+    (testing "Should be able to get an X509Credential from Strings"
+      (is (= sp-fingerprints
+             (x509-credential-fingerprints (coerce/->X509Credential test/sp-cert test/sp-private-key)))))
+    (testing "Should accept a tuple of [public-key private-key]"
+      (is (= sp-fingerprints
+             (x509-credential-fingerprints (coerce/->X509Credential [test/sp-cert test/sp-private-key]))))
+      (is (= idp-fingerprints
+             (x509-credential-fingerprints (coerce/->X509Credential [test/idp-cert])))))
+    (testing "Should be able to get X509Credential from a keystore"
+      (testing "public only"
+        (is (= idp-fingerprints
+               (x509-credential-fingerprints (coerce/->X509Credential {:filename test/keystore-filename
+                                                                       :password test/keystore-password
+                                                                       :alias    "idp"})))))
+      (testing "public + private"
+        (is (= sp-fingerprints
+               (x509-credential-fingerprints (coerce/->X509Credential {:filename test/keystore-filename
+                                                                       :password test/keystore-password
+                                                                       :alias    "sp"}))))))))
+
+(deftest ->Decrypter-test
+  (testing "Should be able to get a Decrypter from a credential"
+    (is (instance? org.opensaml.saml.saml2.encryption.Decrypter
+                   (coerce/->Decrypter [test/sp-cert test/sp-private-key])))))
