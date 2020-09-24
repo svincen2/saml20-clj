@@ -10,14 +10,21 @@
 [![Clojars Project](https://clojars.org/metabase/saml20-clj/latest-version.svg)](http://clojars.org/metabase/saml20-clj)
 
 
-This is a SAML 2.0 clojure library for SSO.
-This library allows a clojure application to act as a service provider (SP).
-Tested with Microsoft Active Directory Federation Server (ADFS) as the identity provider (IdP), as well as Okta and OneLogin.
+This is a SAML 2.0 Clojure library for SSO acting as a fairly thin wrapper around the Java libraries [OpenSAML
+v3](https://wiki.shibboleth.net/confluence/display/OS30/Home) and some utility functions from [OneLogin's SAML
+library](https://github.com/onelogin/java-saml) This library allows a Clojure application to act as a Service Provider
+(SP).
+
+## 2.0.0
+
+*September 23rd 2020*: This library is currently in the process of being reworked with a new API that makes 200% more
+sense. Dox will be updated in the near future once the 2.0.0 release is finalized.
 
 ## Usage
 
 *  See [quephird/saml-test](https://github.com/quephird/saml-test) for the usage.
 *  This repository is forked from [vlacs/saml20-clj](https://github.com/vlacs/saml20-clj), and adds:
+   *  Uses OpenSAML v3 instead of OpenSAML v2 which was EOL'ed in 2016
    *  Tons of bug fixes, such as `saml20-clj.shared/base64->inflate->str` not actually calling `byte-inflate` at all
    *  Fixed millions of reflection warnings
    *  Removed duplicate functions
