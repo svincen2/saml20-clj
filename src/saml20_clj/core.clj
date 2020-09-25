@@ -4,6 +4,7 @@
   (:require [potemkin :as p]
             [saml20-clj
              [coerce :as coerce]
+             [encode-decode :as encode]
              [state :as state]]
             [saml20-clj.sp
              [metadata :as metadata]
@@ -13,6 +14,7 @@
 ;; this is so the linter doesn't complain about unused namespaces.
 (comment
   coerce/keep-me
+  encode/keep-me
   metadata/keep-me
   request/keep-me
   response/keep-me
@@ -20,8 +22,13 @@
 
 (p/import-vars
  [coerce
+  ->X509Certificate
   ->Response
   ->xml-string]
+
+ [encode
+  str->base64
+  base64->str]
 
  [metadata
   metadata]
