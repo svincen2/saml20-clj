@@ -4,7 +4,8 @@
             [saml20-clj
              [coerce :as coerce]
              [test :as test]]
-            [saml20-clj.sp.response :as response]))
+            [saml20-clj.sp.response :as response])
+  (:import org.opensaml.saml.saml2.core.Response))
 
 (deftest response-status-test
   (doseq [{:keys [response], :as response-map} (test/responses)]
@@ -70,9 +71,9 @@
             :when                                (test/signed? response-map)]
       (testing (test/describe-response-map response-map)
         (testing "\nsignature should be valid when checking against IdP cert"
-          (is (= :valid
-                 (response/validate response test/idp-cert test/sp-private-key {:response-validators  [:signature :require-signature]
-                                                                                :assertion-validators [:signature]}))))
+          (is (instance? Response
+                         (response/validate response test/idp-cert test/sp-private-key {:response-validators  [:signature :require-signature]
+                                                                                        :assertion-validators [:signature]}))))
         (testing "\nsignature should be invalid when checking against the wrong cert"
           (is (thrown-with-msg?
                clojure.lang.ExceptionInfo

@@ -9,13 +9,6 @@
   (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction Response
             Subject SubjectConfirmation SubjectConfirmationData]))
 
-;; this is here mostly as a convenience
-(defn ^Response parse-response
-  "Parse/coerce something representing such as a String or Java object `xml` into a OpenSAML `Response`."
-  [xml]
-  (coerce/->Response xml))
-
-
 (defn clone-response
   "Clone an OpenSAML `response` object."
   ^Response [^Response response]
@@ -186,6 +179,7 @@
                            :request-id user-agent-address})))))))
 
 (defn validate
+  "Validate response. Returns decrypted response if valid."
   [response idp-cert sp-private-key {:keys [response-validators
                                             assertion-validators]
                                      :or   {response-validators  [:signature
@@ -206,8 +200,8 @@
         (validate-response validator response decrypted-response options))
       (doseq [assertion (opensaml-assertions decrypted-response)
               validator assertion-validators]
-        (validate-assertion validator assertion options)))
-    :valid))
+        (validate-assertion validator assertion options))
+      decrypted-response)))
 
 
 ;;; +----------------------------------------------------------------------------------------------------------------+
@@ -261,17 +255,17 @@
   "Returns the attributes and the 'audiences' for the given SAML assertion"
   [^Assertion assertion]
   (when assertion
-    (let [statements                (.getAttributeStatements assertion)
-          subject                   (.getSubject assertion)
+    (let [statements   (.getAttributeStatements assertion)
+          subject      (.getSubject assertion)
           subject-data (.getSubjectConfirmationData ^SubjectConfirmation (first (.getSubjectConfirmations subject)))
-          name-id                   (.getNameID subject)
-          attrs                     (into {} (for [^AttributeStatement statement statements
-                                                   ^Attribute attribute          (.getAttributes statement)]
+          name-id      (.getNameID subject)
+          attrs        (into {} (for [^AttributeStatement statement statements
+                                      ^Attribute attribute          (.getAttributes statement)]
                                                [(saml2-attr->name (.getName attribute)) ; Or (.getFriendlyName a) ??
                                                 (map #(-> ^org.opensaml.core.xml.XMLObject % .getDOM .getTextContent)
                                                      (.getAttributeValues attribute))]))
-          audiences                 (for [^AudienceRestriction restriction (.. assertion getConditions getAudienceRestrictions)
-                                          ^Audience audience               (.getAudiences restriction)]
+          audiences    (for [^AudienceRestriction restriction (.. assertion getConditions getAudienceRestrictions)
+                             ^Audience audience               (.getAudiences restriction)]
                                       (.getAudienceURI audience))]
       {:attrs        attrs
        :audiences    audiences

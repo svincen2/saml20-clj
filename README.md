@@ -15,12 +15,88 @@ v3](https://wiki.shibboleth.net/confluence/display/OS30/Home) and some utility f
 library](https://github.com/onelogin/java-saml) This library allows a Clojure application to act as a Service Provider
 (SP).
 
-## 2.0.0
+## 2.0.0 Usage
+
+### Requests
+
+### Responses
+
+Basic usage for responses from the IdP looks like:
+
+```clj
+;; Coerce the response to an OpenSAML `Response`. This can be anything from a raw XML string to a parsed
+;; `org.w3c.dom.Document`
+(-> (saml/->Response xml)
+    ;; decrypt and validate the response. Returns decrypted response
+    (saml/validate idp-cert sp-private-key options)
+    ;; convert the response to a convenient Clojure map
+    saml/assertions)
+```
+
+`validate` accepts several options that let you configure what validations are done. The default options are:
+
+```clj
+{ ;; e.g. "http://sp.example.com/demo1/index.php?acs" The assertion consumer service URL. If this is not-nil, the
+ ;; :recipient validator checks that <SubjectConfirmationData> nodes have a value of Recipient matching this value.
+ :acs-url                      nil
+ ;; The ID of the request we (the SP) sent to the IdP. ID is generated on our end, and should be something like a UUID
+ ;; rather than a sequential number. If non-nil, the :in-response-to validator checks that <SubjectConfirmationData>
+ ;; nodes have a value of InResponseTo that matches an ID.
+ ;;
+ ;; It's a good idea to record the fact that a response for this request ID has been received so a bad actor can't log
+ ;; in with by replaying the same SAML response
+ :request-id                   nil
+ ;; whether this response was solicited (i.e., in response to a request we sent to the IdP). If this is false, the
+ ;; :in-response-to validator checks that the request-id is nil.
+ :solicited?                   true
+ ;; maximum amount of clock skew to allow for the :not-on-or-after and :not-before validators
+ :allowable-clock-skew-seconds 180
+ ;; address of the client. If set, the :address validator will check that <SubjectConfirmationData> nodes have an
+ ;; Address matching this value *iff* Address is present. Address is optional attribute.
+ :user-agent-address           nil
+ ;; :response-validators and :assertion-validators are validation functions that run and check that the Response is
+ ;; valid. If a check fails, these methods will throw an Exception. You can exclude some of these validators or add
+ ;; your own by passing different values for these keys. Both types of validators are defined as multimethods; you can
+ ;; add custom validators by adding more method implementations to their respective multimethods.
+ ;;
+ ;; :response-validators are validation functions that run once for the entire Response. They are defined as
+ ;; implementations of the saml20-clj.sp.response/validate-response multimethod.
+ :response-validators
+ ;; The default Response validators are:
+ [;; If the <Response> itself is signed, verifies that this signature is matches the Response itself and matches the
+  ;; IdP certificate. If Response is not signed, this validator does nothing.
+  :signature
+  ;; requires that either the <Response> is signed, *every* <Assertion> is signed.
+  :require-signature]
+ ;;
+ ;; :assertion validators are validation functions that run against every Assertion in the response. They are defined
+ ;; as implementations of saml20-clj.sp.response/validate-assertion.
+ :assertion-validators
+ ;; The default Assertion validators are:
+ [;; If <Assertion> is signed, the signature matches the Assertion and the IdP certificate. If <Assertion> is not
+  ;; signed, this validator does nothing.
+  :signature
+  ;; If :acs-url is non-nil, and <SubjectConfirmationData> is present, checks that <SubjectConfirmationData> has a
+  ;; Recipient attribute matching this value.
+  :recipient
+  ;; If <SubjectConfirmationData> is present, has a NotOnOrAfter attribute, and its value is in the future,
+  ;; accounting for :allowable-clock-skew-seconds
+  :not-on-or-after
+  ;; If <SubjectConfirmationData> has a NotBefore attribute, checks that this value is in the past, accounting for
+  ;; :allowable-clock-skew-seconds
+  :not-before
+  ;; If :request-id is non-nil and <SubjectConfirmationData> is present, checks that <SubjectConfirmationData> has an
+  ;; InResponseTo attribute matching :request-id.
+  :in-response-to
+  ;; If :user-agent-address is non-nil and <SubjectConfirmationData> has an Address attribute, checks that Address
+  ;; matches this value.
+  :address]}
+```
 
 *September 23rd 2020*: This library is currently in the process of being reworked with a new API that makes 200% more
 sense. Dox will be updated in the near future once the 2.0.0 release is finalized.
 
-## Usage
+## Differences from the original `saml20-clj` library
 
 *  See [quephird/saml-test](https://github.com/quephird/saml-test) for the usage.
 *  This repository is forked from [vlacs/saml20-clj](https://github.com/vlacs/saml20-clj), and adds:
