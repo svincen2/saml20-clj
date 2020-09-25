@@ -12,6 +12,14 @@
      (.setFeature "http://apache.org/xml/features/nonvalidating/load-external-dtd" false)
      (.setExpandEntityReferences false))))
 
+(defn clone-document [^org.w3c.dom.Document document]
+  (when document
+    (let [clone         (.. (DocumentBuilderFactory/newInstance) newDocumentBuilder newDocument)
+          original-root (.getDocumentElement document)
+          root-copy     (.importNode clone original-root true)]
+      (.appendChild clone root-copy)
+      clone)))
+
 (defn str->xmldoc
   "Parse a string into an XML `Document`."
   ^Document [^String s]

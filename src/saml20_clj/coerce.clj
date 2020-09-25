@@ -278,35 +278,6 @@
   (->Response [this]
     (->Response (->SAMLObject this))))
 
-#_(defprotocol CoerceToDecrypter
-  (->Decrypter ^org.opensaml.saml.saml2.encryption.Decrypter [this]))
-#_
-(extend-protocol CoerceToDecrypter
-  nil
-  (->Decrypter [_] nil)
-
-  org.opensaml.saml.saml2.encryption.Decrypter
-  (->Decrypter [this] this)
-
-  org.opensaml.security.x509.X509Credential
-  (->Decrypter [credential]
-    (when (.getPrivateKey credential)
-      (doto (org.opensaml.saml.saml2.encryption.Decrypter.
-             nil
-             (org.opensaml.xmlsec.keyinfo.impl.StaticKeyInfoCredentialResolver. credential)
-             ;; these resolvers are chained together so OpenSAML can look in different places around the assertion to
-             ;; find the encryption key.
-             (org.opensaml.xmlsec.encryption.support.ChainingEncryptedKeyResolver.
-              (list (org.opensaml.xmlsec.encryption.support.InlineEncryptedKeyResolver.)
-                    (org.opensaml.saml.saml2.encryption.EncryptedElementTypeEncryptedKeyResolver.)
-                    (org.opensaml.xmlsec.encryption.support.SimpleRetrievalMethodEncryptedKeyResolver.)
-                    (org.opensaml.xmlsec.encryption.support.SimpleKeyInfoReferenceEncryptedKeyResolver.))))
-        (.setRootInNewDocument true))))
-
-  Object
-  (->Decrypter [this]
-    (->Decrypter (->Credential this))))
-
 (extend-protocol SerializeXMLString
   nil
   (->xml-string [_] nil)
@@ -323,6 +294,7 @@
   org.w3c.dom.Node
   (->xml-string [this]
     (let [transformer (doto (.. javax.xml.transform.TransformerFactory newInstance newTransformer)
+                        #_(.setOutputProperty javax.xml.transform.OutputKeys/OMIT_XML_DECLARATION "yes")
                         (.setOutputProperty javax.xml.transform.OutputKeys/ENCODING "UTF-8")
                         (.setOutputProperty javax.xml.transform.OutputKeys/INDENT "yes")
                         (.setOutputProperty "{http://xml.apache.org/xslt}indent-amount" "2"))
@@ -334,4 +306,4 @@
 
   org.opensaml.core.xml.XMLObject
   (->xml-string [this]
-    (->xml-string (->Element this))))
+    (->xml-string (.getDOM this))))

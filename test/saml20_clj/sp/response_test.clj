@@ -35,40 +35,51 @@
 
 ;; • Verify any signatures present on the assertion(s) or the response
 
-(defn- validate-signature
-  ([response]
-   (validate-signature response test/idp-cert test/sp-private-key))
-
-  ([response idp-cert sp-credentials]
-   (try
-     (response/assert-valid-signatures
-      response
-      idp-cert
-      sp-credentials)
-     true
-     (catch Throwable e
-       false))))
+(deftest decrypt-response-test
+  (testing "Should be able to decrypt a response"
+    (let [original              (coerce/->Response (saml20-clj.test/response {:assertion-signed? true, :assertion-encrypted? true}))
+          xml-before-decryption (coerce/->xml-string original)
+          decrypted             (response/decrypt-response original test/sp-private-key)]
+      (testing (str "\noriginal =\n" (coerce/->xml-string original))
+        (testing (str "decrypted =\n" (coerce/->xml-string decrypted))
+          (is (= 0
+                 (count (.getEncryptedAssertions decrypted))))
+          (is (= 1
+                 (count (.getAssertions decrypted))))
+          (testing "\noriginal object should not be modified"
+            (is (= xml-before-decryption
+                   (coerce/->xml-string original)))
+            (is (= 0
+                   (count (.getAssertions original))))
+            (is (= 1
+                   (count (.getEncryptedAssertions original))))))))))
 
 (deftest assert-valid-signatures-test
   (testing "unsigned responses should fail\n"
     (doseq [{:keys [response], :as response-map} (test/responses)
             :when                                (not (test/signed? response-map))]
       (testing (test/describe-response-map response-map)
-        (is (= false
-               (validate-signature response))))))
+        (is (thrown-with-msg?
+             java.lang.AssertionError
+             #"Neither response nor assertion\(s\) are signed"
+             (response/assert-valid-signatures response test/idp-cert test/sp-private-key))))))
   (testing "valid signed responses should pass\n"
     (doseq [{:keys [response], :as response-map} (test/responses)
             :when                                (test/signed? response-map)]
       (testing (test/describe-response-map response-map)
         (testing "\nsignature should be valid when checking against IdP cert"
-          (is (= true
-                 (validate-signature response))))
+          (is (= :valid
+                 (response/assert-valid-signatures response test/idp-cert test/sp-private-key))))
         (testing "\nsignature should be invalid when checking against the wrong cert"
-          (is (= false
-                 ;; using SP cert for both instead
-                 (validate-signature response test/sp-cert {:filename test/keystore-filename
-                                                            :password test/keystore-password
-                                                            :alias    "sp"}))))))))
+          (is (thrown-with-msg?
+               clojure.lang.ExceptionInfo
+               #"Invalid <(?:Response)|(?:Assertion)> signature"
+               ;; using SP cert for both instead
+               (response/assert-valid-signatures
+                response
+                test/sp-cert {:filename test/keystore-filename
+                              :password test/keystore-password
+                              :alias    "sp"}))))))))
 
 ;;
 ;; Subject Confirmation Data Verifications

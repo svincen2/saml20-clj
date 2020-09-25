@@ -104,11 +104,12 @@
 (defn describe-response-map
   "Human-readable string description of a response map (from `responses`), useful for `testing` context when writing
   test code that loops over various responses."
-  [{:keys [message-signed? assertion-signed? assertion-encrypted? valid-confirmation-data? invalid-confirmation-data?]}]
-  (format "Response with %s message, %s%s %s assertion"
+  [{:keys [message-signed? assertion-signed? assertion-encrypted? valid-confirmation-data? invalid-confirmation-data?], :as m}]
+  (format "Response with %s message, %s%s %s assertion\n%s"
           (if message-signed? "SIGNED" "unsigned")
-          (cond valid-confirmation-data?   "VALID-CONFIRMATION-DATA, "
-                invalid-confirmation-data? "INVALID-CONFIRMATION-DATA, "
+          (cond valid-confirmation-data?   "VALID confirmation data, "
+                invalid-confirmation-data? "INVALID confiration data, "
                 :else                      "")
           (if assertion-signed? "SIGNED" "unsigned")
-          (if assertion-encrypted? "ENCRYPTED" "unencrypted")))
+          (if assertion-encrypted? "ENCRYPTED" "unencrypted")
+          (pr-str (list 'saml20-clj.test/response (dissoc m :response)))))

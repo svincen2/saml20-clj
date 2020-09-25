@@ -6,7 +6,8 @@
              [core :as t]]
             [saml20-clj
              [coerce :as coerce]
-             [crypto :as crypto]])
+             [crypto :as crypto]
+             [xml :as xml]])
   (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction Response SubjectConfirmation]))
 
 ;; this is here mostly as a convenience
@@ -84,10 +85,21 @@
                       :address         (.getAddress subject-confirmation-data)
                       :recipient       (.getRecipient subject-confirmation-data)}})))
 
-(defn decrypt-response ^org.opensaml.saml.saml2.core.Response [response sp-private-key]
-  (let [element (coerce/->Element response)]
-    (crypto/recursive-decrypt! sp-private-key element)
-    (coerce/->Response element)))
+(defn clone-response
+  "Clone an OpenSAML `response` object."
+  ^org.opensaml.saml.saml2.core.Response [^org.opensaml.saml.saml2.core.Response response]
+  (coerce/->Response (xml/clone-document (.. response getDOM getOwnerDocument))))
+
+(defn decrypt-response
+  ^org.opensaml.saml.saml2.core.Response [response sp-private-key]
+  ;; clone the response, otherwise decryption will be destructive.
+  (when-let [response (coerce/->Response response)]
+    (if (empty? (.getEncryptedAssertions response))
+      response
+      (let [clone   (clone-response response)
+            element (.getDOM clone)]
+        (crypto/recursive-decrypt! sp-private-key element)
+        (coerce/->Response element)))))
 
 (defn opensaml-assertions
   [response sp-private-key]
@@ -114,7 +126,8 @@
       ;; validate that the signature conforms to the SAML signature spec
       (.validate (org.opensaml.saml.security.impl.SAMLSignatureProfileValidator.) signature)
       ;; validate that the signature matches the IdP cert
-      (org.opensaml.xmlsec.signature.support.SignatureValidator/validate signature credential))))
+      (org.opensaml.xmlsec.signature.support.SignatureValidator/validate signature credential)
+      :valid)))
 
 (defn assert-valid-signatures
   "Check that `response` from the IdP is signed somewhere (either the entire response, or *all* of the assertion(s)),
@@ -125,17 +138,20 @@
   [response idp-cert sp-private-key]
   (when-let [response (coerce/->Response response)]
     (when-let [idp-cert (coerce/->Credential idp-cert)]
-      ;; validate signature on the response if there is one. This has to be done before decrypting the assertions,
-      ;; because decryption mutates `response` and that affects the checksum of the response
-      (assert-signature-valid-when-present response idp-cert)
       (let [assertions (opensaml-assertions response sp-private-key)]
-        ;; make sure either the response or all the assertion(s) are signed
-        (when-not (or (signed? response)
-                      (every? signed? assertions))
-          (throw (ex-info "Neither response nor assertion(s) are signed" {})))
-        ;; validate signature(s) on the assertion(s) if there are any
-        (doseq [assertion assertions]
-          (assert-signature-valid-when-present assertion idp-cert))))))
+        (when-not (signed? response)
+          (assert (seq assertions) "Unsigned response has no assertions (no signatures can be verified)")
+          (assert (every? signed? assertions) "Neither response nor assertion(s) are signed"))
+        (try
+          (assert-signature-valid-when-present response idp-cert)
+          (catch Throwable e
+            (throw (ex-info "Invalid <Response> signature" {} e))))
+        (try
+          (doseq [assertion assertions]
+            (assert-signature-valid-when-present assertion idp-cert))
+          (catch Throwable e
+            (throw (ex-info "Invalid <Assertion> signature(s)" {} e))))
+        :valid))))
 
 ;;
 ;; Subject Confirmation Data Checks
@@ -196,15 +212,27 @@
       (and address (= address user-agent-address))
       true))) ; Address attribute may not be included, which is still valid
 
-;; TODO
-#_(defn validate [^Response response ^String idp-cert-str]
-    "From the SAML spec: https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf
+(defn validate [response idp-cert-str]
+  "From the SAML spec: https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf
 
   Regardless of the SAML binding used, the service provider MUST do the following:
 
   • Verify any signatures present on the assertion(s) or the response
 
+  • Verify that the Recipient attribute in any bearer <SubjectConfirmationData> matches the
+  assertion consumer service URL to which the <Response> or artifact was delivered
+
+  • Verify that the NotOnOrAfter attribute in any bearer <SubjectConfirmationData> has not
+  passed, subject to allowable clock skew between the providers
+
+  • Verify that the InResponseTo attribute in the bearer <SubjectConfirmationData> equals the ID
+  of its original <AuthnRequest> message, unless the response is unsolicited (see Section 4.1.5 ), in
+  which case the attribute MUST NOT be present
+
   • Verify that any assertions relied upon are valid in other respects
+
+  • If any bearer <SubjectConfirmationData> includes an Address attribute, the service provider
+  MAY check the user agent's client address against it.
 
   • Any assertion which is not valid, or whose subject confirmation requirements cannot be met SHOULD
   be discarded and SHOULD NOT be used to establish a security context for the principal.
@@ -213,10 +241,3 @@
   SessionNotOnOrAfter attribute, the security context SHOULD be discarded once this time is
   reached, unless the service provider reestablishes the principal's identity by repeating the use of this
   profile.")
-
-;; TODO
-#_(def status-code-success "urn:oasis:names:tc:SAML:2.0:status:Success")
-
-#_(defn saml-successful?
-  [id-str]
-  (= id-str status-code-success))
