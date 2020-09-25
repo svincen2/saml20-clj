@@ -1,6 +1,6 @@
 (ns saml20-clj.sp.request-test
-  (:require [clj-time.core :as c.time]
-            [clojure.test :refer :all]
+  (:require [clojure.test :refer :all]
+            [java-time :as t]
             [saml20-clj.sp.request :as request]
             [saml20-clj.test :as test]))
 
@@ -11,7 +11,7 @@
 
 (deftest timeout-bump-test
   (testing "test saml timeout-bump: Attempt to bump a stateful saml timeout on a fake request."
-    (let [time-now (c.time/now)]
+    (let [time-now (t/instant)]
       (is (= time-now
              (let [mutable (ref {})
                    saml-id 12345]
@@ -21,9 +21,9 @@
 (deftest prune-timed-out-ids-test
   (testing "test prune timed out ids: Attempt to remove a stale record from a mutable hash."
     (is (= {:count 1, :get-1? false, :get-2? true}
-           (let [mutable (ref {1 (c.time/date-time 2013 10 10)
-                               2 (c.time/now)})
-                 timeout (c.time/minutes 10)]
+           (let [mutable (ref {1 (t/instant "2013-10-10T00:00:00.000Z")
+                               2 (t/instant)})
+                 timeout (t/minutes 10)]
              (request/prune-timed-out-ids! mutable timeout)
              {:count  (count @mutable)
               :get-1? (some? (get @mutable 1))

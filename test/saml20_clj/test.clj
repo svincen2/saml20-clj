@@ -95,6 +95,12 @@
 (defn signed? [response-map]
   ((some-fn :message-signed? :assertion-signed?) response-map))
 
+(defn valid-confirmation-data? [response-map]
+  ((some-fn :valid-confirmation-data?) response-map))
+
+(defn invalid-confirmation-data? [response-map]
+  ((some-fn :invalid-confirmation-data?) response-map))
+
 (defn describe-response-map
   "Human-readable string description of a response map (from `responses`), useful for `testing` context when writing
   test code that loops over various responses."

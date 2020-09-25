@@ -1,11 +1,9 @@
 (ns saml20-clj.sp.request
-  (:require [clj-time
-             [core :as c.time]
-             [format :as c.format]]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [hiccup
              [core :as hiccup]
              [page :as h.page]]
+            [java-time :as t]
             [ring.util.codec :as codec]
             [saml20-clj
              [coerce :as coerce]
@@ -28,14 +26,14 @@
 
 (defn ^:deprecated time-since
   [time-span]
-  (c.time/minus (c.time/now) time-span))
+  (t/minus (t/instant) time-span))
 
 (defn ^:deprecated make-timeout-filter-fn
   "Creates a function for clojure.core/filter to keep all dates after
   a given date."
   [timespan]
   (fn [i]
-    (c.time/after? (second i) (time-since timespan))))
+    (t/after? (second i) (time-since timespan))))
 
 (defn ^:deprecated prune-timed-out-ids!
   "Given a timeout duration, remove all SAML IDs that are older than now minus the timeout."
@@ -119,12 +117,10 @@
    :saml-last-id     (atom 0)
    :secret-key-spec  (new-secret-key-spec)})
 
-(def ^:deprecated ^:private instant-format (c.format/formatters :date-time-no-ms))
-
-(defn- ^:deprecated make-issue-instant
+(defn- make-issue-instant
   "Converts a date-time to a SAML 2.0 time string."
-  [ii-date]
-  (c.format/unparse instant-format ii-date))
+  [instant]
+  (t/format (t/format "YYYY-MM-dd'T'HH:mm:ss" (t/offset-date-time instant (t/zone-offset 0)))))
 
 (defn ^:deprecated create-request-factory
   "Creates new requests for a particular service, format, and acs-url."
@@ -137,7 +133,7 @@
 
   ([next-saml-id-fn! bump-saml-id-timeout-fn! xml-signer idp-uri saml-service-name acs-url]
    (fn request-factory []
-     (let [current-time  (c.time/now)
+     (let [current-time  (t/instant)
            new-saml-id   (next-saml-id-fn!)
            issue-instant (make-issue-instant current-time)
            new-request   (create-request issue-instant
