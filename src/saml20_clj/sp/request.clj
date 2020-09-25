@@ -29,7 +29,7 @@
                                 ;; If present, record the request
                                 state-manager
                                 ;; If present, we can sign the request
-                                private-key
+                                credential
                                 instant]
                          :or   {request-id (str (java.util.UUID/randomUUID))
                                 instant (t/instant)}}]
@@ -55,7 +55,7 @@
     (when state-manager
       (state/record-request! state-manager (.getAttribute request "ID")))
     (cond-> request
-      private-key (crypto/sign private-key))))
+      credential (crypto/sign credential))))
 
 (defn uri-query-str
   ^String [clean-hash]
