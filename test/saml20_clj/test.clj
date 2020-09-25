@@ -6,7 +6,6 @@
 
 (def sp-entity-id "sp.example.com")
 (def sp-attribute-consume-service-endpoint "http://sp.example.com/demo1/index.php?acs")
-(def target-uri "http://sp.example.com/demo1/index.php?acs")
 
 ;; keystore has SP x.509 cert and private keys under "sp" and IdP X.509 cert under "idp"
 (def keystore-filename "test/saml20_clj/test/keystore.jks")

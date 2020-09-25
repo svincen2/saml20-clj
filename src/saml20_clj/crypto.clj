@@ -1,6 +1,8 @@
 (ns saml20-clj.crypto
   (:require [saml20-clj.coerce :as coerce])
-  (:import org.opensaml.xmlsec.signature.support.SignatureConstants))
+  (:import org.apache.xml.security.Init
+           org.opensaml.security.credential.Credential
+           org.opensaml.xmlsec.signature.support.SignatureConstants))
 
 (def signature-algorithms
   {:dsa   {nil     SignatureConstants/ALGO_ID_SIGNATURE_DSA
@@ -25,12 +27,17 @@
    :excl-omit-comments SignatureConstants/ALGO_ID_C14N_EXCL_OMIT_COMMENTS
    :excl-with-comments SignatureConstants/ALGO_ID_C14N_EXCL_WITH_COMMENTS})
 
-(defn sign ^org.w3c.dom.Node [credential object & {:keys [signature-algorithm
-                                                          canonicalization-algorithm]
-                                                   :or   {signature-algorithm        [:rsa :sha256]
-                                                          canonicalization-algorithm :excl-omit-comments}}]
+;; TODO -- I'm pretty sure this mutates `object`
+(defn sign
+  ^org.w3c.dom.Element [object credential & {:keys [signature-algorithm
+                                                    canonicalization-algorithm]
+                                             :or   {signature-algorithm        [:rsa :sha256]
+                                                    canonicalization-algorithm :excl-omit-comments}}]
   (when-let [object (coerce/->SAMLObject object)]
-    (when-let [credential (coerce/->Credential credential)]
+    (when-let [^Credential credential (try
+                                        (coerce/->Credential credential)
+                                        (catch Throwable _
+                                          (coerce/->Credential (coerce/->PrivateKey credential))))]
       (let [signature (doto (.buildObject (org.opensaml.xmlsec.signature.impl.SignatureBuilder.))
                         (.setSigningCredential credential)
                         (.setSignatureAlgorithm (or (get-in signature-algorithms signature-algorithm)
@@ -39,6 +46,9 @@
                         (.setCanonicalizationAlgorithm (or (get canonicalization-algorithms canonicalization-algorithm)
                                                            (throw (ex-info "No matching canonicalization algorithm"
                                                                            {:algorithm canonicalization-algorithm})))))]
+        ;; TODO -- Add KeyInfo about the public key ???
+        ;; (when-let [cert (coerce/->X509Certificate credential)]
+        ;;   (.setKeyInfo (.getPublicKey cert)))
         (.setSignature object signature)
         (let [element (coerce/->Element object)]
           (org.opensaml.xmlsec.signature.support.Signer/signObject signature)
@@ -58,3 +68,48 @@
               :let  [child (.. element getChildNodes (item i))]
               :when (instance? org.w3c.dom.Element child)]
         (recursive-decrypt! sp-private-key child)))))
+
+(defn ^:private secure-random-bytes
+  (^bytes [size]
+   (let [ba (byte-array size)
+         r  (java.security.SecureRandom.)]
+     (.nextBytes r ba)
+     ba))
+  (^bytes []
+   (secure-random-bytes 20)))
+
+(defn new-secret-key ^javax.crypto.spec.SecretKeySpec []
+  (javax.crypto.spec.SecretKeySpec. (secure-random-bytes) "HmacSHA1"))
+
+(defonce ^:private -init
+  (do
+    (Init/init)
+    nil))
+
+(defn signed? [object]
+  (when-let [object (coerce/->SAMLObject object)]
+    (.isSigned object)))
+
+(defn signature [object]
+  (when-let [object (coerce/->SAMLObject object)]
+    (.getSignature object)))
+
+(defn assert-signature-valid-when-present
+  [object credential]
+  (when-let [signature (signature object)]
+    (when-let [credential (coerce/->Credential credential)]
+      ;; validate that the signature conforms to the SAML signature spec
+      (try
+        (.validate (org.opensaml.saml.security.impl.SAMLSignatureProfileValidator.) signature)
+        (catch Throwable e
+          (throw (ex-info "Signature does not conform to SAML signature spec"
+                          {:object (coerce/->xml-string object)}
+                          e))))
+      ;; validate that the signature matches the credential
+      (try
+        (org.opensaml.xmlsec.signature.support.SignatureValidator/validate signature credential)
+        (catch Throwable e
+          (throw (ex-info "Signature does not match credential"
+                          {:object (coerce/->xml-string object)}
+                          e))))
+      :valid)))

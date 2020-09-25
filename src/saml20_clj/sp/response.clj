@@ -31,24 +31,6 @@
     (assert (empty? (.getEncryptedAssertions response)) "Response is still encrypted")
     (not-empty (.getAssertions response))))
 
-(defn- signed? [object]
-  (when-let [object (coerce/->SAMLObject object)]
-    (.isSigned object)))
-
-(defn- signature [object]
-  (when-let [object (coerce/->SAMLObject object)]
-    (.getSignature object)))
-
-(defn- assert-signature-valid-when-present
-  [object credential]
-  (when-let [signature (signature object)]
-    (when-let [credential (coerce/->Credential credential)]
-      ;; validate that the signature conforms to the SAML signature spec
-      (.validate (org.opensaml.saml.security.impl.SAMLSignatureProfileValidator.) signature)
-      ;; validate that the signature matches the IdP cert
-      (org.opensaml.xmlsec.signature.support.SignatureValidator/validate signature credential)
-      :valid)))
-
 (defmulti validate-response
   {:arglists '([validation encrypted-response unencryped-response options])}
   (fn [validation _ _ _]
@@ -57,16 +39,16 @@
 (defmethod validate-response :signature
   [_ encrypted-response _ {:keys [idp-cert]}]
   (try
-    (assert-signature-valid-when-present encrypted-response idp-cert)
+    (crypto/assert-signature-valid-when-present encrypted-response idp-cert)
     (catch Throwable e
       (throw (ex-info "Invalid <Response> signature" {} e)))))
 
 (defmethod validate-response :require-signature
   [_ encrypted-response decrypted-response _]
-  (when-not (signed? encrypted-response)
+  (when-not (crypto/signed? encrypted-response)
     (let [assertions (opensaml-assertions decrypted-response)]
       (assert (seq assertions) "Unsigned response has no assertions (no signatures can be verified)")
-      (assert (every? signed? assertions) "Neither response nor assertion(s) are signed"))))
+      (assert (every? crypto/signed? assertions) "Neither response nor assertion(s) are signed"))))
 
 ;;
 ;; Subject Confirmation Data Checks
@@ -97,7 +79,7 @@
 (defmethod validate-assertion :signature
   [_ assertion {:keys [idp-cert]}]
   (try
-    (assert-signature-valid-when-present assertion idp-cert)
+    (crypto/assert-signature-valid-when-present assertion idp-cert)
     (catch Throwable e
       (throw (ex-info "Invalid <Assertion> signature(s)" {} e)))))
 

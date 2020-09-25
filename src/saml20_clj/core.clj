@@ -18,14 +18,9 @@
   ->xml-string]
 
  [request
-  bump-saml-id-timeout!
-  create-request
-  create-request-factory
-  generate-mutables
-  get-idp-redirect
+  idp-redirect-response
   metadata
-  next-saml-id!
-  prune-timed-out-ids!]
+  request]
 
  [response
   decrypt-response
