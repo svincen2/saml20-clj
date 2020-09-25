@@ -42,8 +42,6 @@ Basic usage for requests to the IdP looks like:
                                 "http://sp.example.com/please/redirect/me/to/here"))
 ```
 
-```clj
-
 ### Responses
 
 Basic usage for responses from the IdP looks like:
