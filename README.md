@@ -22,8 +22,10 @@ library](https://github.com/onelogin/java-saml) This library allows a Clojure ap
 Basic usage for requests to the IdP looks like:
 
 ```clj
+(require '[saml20-clj.core :as saml])
+
 ;; create a new request
-(-> (core/request
+(-> (saml/request
      {:issued-timestamp (t/instant "2020-09-24T22:51:00.000Z")
       :request-id       "ONELOGIN_809707f0030a5d00620c9d9df97f627afe9dcc24"
       :sp-name          "SP test"
@@ -32,7 +34,7 @@ Basic usage for requests to the IdP looks like:
       :issuer           "http://sp.example.com/demo1/metadata.php"
       :private-key      test/sp-private-key})
     ;; create a Ring redirect response to the IDP URL; pass the request as base-64 encoded `SAMLRequest` query parameter
-    (core/idp-redirect-response "http://idp.example.com/SSOService.php"
+    (saml/idp-redirect-response "http://idp.example.com/SSOService.php"
                                 ;; This is RelayState. In the old version of the lib it was encrypted. In some cases,
                                 ;; like this it's not really sensitive so it doesn't need to be encrypted. Adding
                                 ;; automatic encryption support back is on the TODO list
@@ -46,6 +48,8 @@ Basic usage for requests to the IdP looks like:
 Basic usage for responses from the IdP looks like:
 
 ```clj
+(require '[saml20-clj.core :as saml])
+
 ;; Coerce the response to an OpenSAML `Response`. This can be anything from a raw XML string to a parsed
 ;; `org.w3c.dom.Document`
 (-> (saml/->Response xml)
