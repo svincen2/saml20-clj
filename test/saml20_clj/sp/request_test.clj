@@ -37,13 +37,13 @@
           "</samlp:AuthnRequest>"]
          (str/split-lines
           (coerce/->xml-string
-           (request/request
-            {:issued-timestamp (t/instant "2020-09-24T22:51:00.000Z")
-             :request-id       "ONELOGIN_809707f0030a5d00620c9d9df97f627afe9dcc24"
-             :sp-name          "SP test"
-             :acs-url          "http://sp.example.com/demo1/index.php?acs"
-             :idp-url          "http://idp.example.com/SSOService.php"
-             :issuer           "http://sp.example.com/demo1/metadata.php"})))))
+           (t/with-clock (t/mock-clock (t/instant "2020-09-24T22:51:00.000Z"))
+             (request/request
+              {:request-id "ONELOGIN_809707f0030a5d00620c9d9df97f627afe9dcc24"
+               :sp-name    "SP test"
+               :acs-url    "http://sp.example.com/demo1/index.php?acs"
+               :idp-url    "http://idp.example.com/SSOService.php"
+               :issuer     "http://sp.example.com/demo1/metadata.php"}))))))
 
   (testing "should be able to create a signed request"
     (is (= ["<?xml version=\"1.0\" encoding=\"UTF-8\"?><samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" AssertionConsumerServiceURL=\"http://sp.example.com/demo1/index.php?acs\" Destination=\"http://idp.example.com/SSOService.php\" ID=\"ONELOGIN_809707f0030a5d00620c9d9df97f627afe9dcc24\" IssueInstant=\"2020-09-24T22:51:00.000Z\" ProtocolBinding=\"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST\" ProviderName=\"SP test\" Version=\"2.0\">"
@@ -68,14 +68,14 @@
             "</ds:SignatureValue>"
             "</ds:Signature>"
             "</samlp:AuthnRequest>"]
-           (->> (request/request
-                 {:issued-timestamp (t/instant "2020-09-24T22:51:00.000Z")
-                  :request-id       "ONELOGIN_809707f0030a5d00620c9d9df97f627afe9dcc24"
-                  :sp-name          "SP test"
-                  :acs-url          "http://sp.example.com/demo1/index.php?acs"
-                  :idp-url          "http://idp.example.com/SSOService.php"
-                  :issuer           "http://sp.example.com/demo1/metadata.php"
-                  :private-key      test/sp-private-key})
+           (->> (t/with-clock (t/mock-clock (t/instant "2020-09-24T22:51:00.000Z"))
+                  (request/request
+                   {:request-id  "ONELOGIN_809707f0030a5d00620c9d9df97f627afe9dcc24"
+                    :sp-name     "SP test"
+                    :acs-url     "http://sp.example.com/demo1/index.php?acs"
+                    :idp-url     "http://idp.example.com/SSOService.php"
+                    :issuer      "http://sp.example.com/demo1/metadata.php"
+                    :private-key test/sp-private-key}))
                 coerce/->xml-string
                 str/split-lines
                 ;; for some reason it indents the XML differently on the REPL and in the tests

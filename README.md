@@ -26,9 +26,7 @@ Basic usage for requests to the IdP looks like:
 
 ;; create a new request
 (-> (saml/request
-     {:issued-timestamp (t/instant "2020-09-24T22:51:00.000Z")
-      :request-id       "ONELOGIN_809707f0030a5d00620c9d9df97f627afe9dcc24"
-      :sp-name          "SP test"
+     {:sp-name          "My SP Name"
       :acs-url          "http://sp.example.com/demo1/index.php?acs"
       :idp-url          "http://idp.example.com/SSOService.php"
       :issuer           "http://sp.example.com/demo1/metadata.php"

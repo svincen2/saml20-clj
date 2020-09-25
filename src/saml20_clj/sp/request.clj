@@ -46,8 +46,7 @@
 
 (defn request
   "Return XML elements that represent a SAML 2.0 auth request."
-  [{:keys [issued-timestamp
-           ;; e.g. something like a UUID
+  [{:keys [;; e.g. something like a UUID
            request-id
            ;; e.g. "Metabase"
            sp-name
@@ -59,8 +58,7 @@
            issuer
            ;; If present, we can sign the request
            private-key]
-    :or   {issued-timestamp (t/instant)
-           request-id       (str (java.util.UUID/randomUUID))}}]
+    :or   {request-id (str (java.util.UUID/randomUUID))}}]
   (assert acs-url)
   (assert idp-url)
   (assert sp-name)
@@ -69,7 +67,7 @@
                               {:xmlns:samlp                 "urn:oasis:names:tc:SAML:2.0:protocol"
                                :ID                          request-id
                                :Version                     "2.0"
-                               :IssueInstant                (format-instant issued-timestamp)
+                               :IssueInstant                (format-instant (t/instant))
                                :ProtocolBinding             "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
                                :ProviderName                sp-name
                                :IsPassive                   false
