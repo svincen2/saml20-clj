@@ -22,7 +22,7 @@
 
   :dependencies
   [[org.clojure/tools.logging "1.1.0"]
-   [clj-time "0.15.2"]
+   [com.onelogin/java-saml "2.5.0"]
    [commons-io/commons-io "2.8.0"]
    [hiccup "1.0.5"]
    [org.opensaml/opensaml-core "3.4.5"]
@@ -30,9 +30,9 @@
    [org.opensaml/opensaml-saml-impl "3.4.5"]
    [org.opensaml/opensaml-xmlsec-api "3.4.5"]
    [org.opensaml/opensaml-xmlsec-impl "3.4.5"]
-   [com.onelogin/java-saml "2.5.0"]
    [potemkin "0.4.5"]
-   [ring/ring-codec "1.1.2"]]           ; for the url-encode codec
+   [ring/ring-codec "1.1.2"]
+   [robdaemon/clojure.java-time "0.3.3-SNAPSHOT"]]
 
   :profiles
   {:dev

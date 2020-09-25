@@ -1,20 +1,218 @@
 (ns saml20-clj.sp.response
   "Code for parsing the XML response (as a String)from the IdP to an OpenSAML `Response`, and for basic operations like
   validating the signature and reading assertions."
-  (:require [clj-time
-             [coerce :as c.coerce]
-             [core :as t]]
+  (:require [java-time :as t]
             [saml20-clj
              [coerce :as coerce]
              [crypto :as crypto]
              [xml :as xml]])
-  (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction Response SubjectConfirmation]))
+  (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction Response
+            Subject SubjectConfirmation SubjectConfirmationData]))
 
 ;; this is here mostly as a convenience
 (defn ^Response parse-response
   "Parse/coerce something representing such as a String or Java object `xml` into a OpenSAML `Response`."
   [xml]
   (coerce/->Response xml))
+
+
+(defn clone-response
+  "Clone an OpenSAML `response` object."
+  ^Response [^Response response]
+  (coerce/->Response (xml/clone-document (.. response getDOM getOwnerDocument))))
+
+(defn decrypt-response
+  ^Response [response sp-private-key]
+  ;; clone the response, otherwise decryption will be destructive.
+  (when-let [response (coerce/->Response response)]
+    (if (empty? (.getEncryptedAssertions response))
+      response
+      (let [clone   (clone-response response)
+            element (.getDOM clone)]
+        (crypto/recursive-decrypt! sp-private-key element)
+        (coerce/->Response element)))))
+
+(defn opensaml-assertions
+  [response]
+  (when-let [response (coerce/->Response response)]
+    (assert (empty? (.getEncryptedAssertions response)) "Response is still encrypted")
+    (not-empty (.getAssertions response))))
+
+(defn- signed? [object]
+  (when-let [object (coerce/->SAMLObject object)]
+    (.isSigned object)))
+
+(defn- signature [object]
+  (when-let [object (coerce/->SAMLObject object)]
+    (.getSignature object)))
+
+(defn- assert-signature-valid-when-present
+  [object credential]
+  (when-let [signature (signature object)]
+    (when-let [credential (coerce/->Credential credential)]
+      ;; validate that the signature conforms to the SAML signature spec
+      (.validate (org.opensaml.saml.security.impl.SAMLSignatureProfileValidator.) signature)
+      ;; validate that the signature matches the IdP cert
+      (org.opensaml.xmlsec.signature.support.SignatureValidator/validate signature credential)
+      :valid)))
+
+(defmulti validate-response
+  {:arglists '([validation encrypted-response unencryped-response options])}
+  (fn [validation _ _ _]
+    (keyword validation)))
+
+(defmethod validate-response :signature
+  [_ encrypted-response _ {:keys [idp-cert]}]
+  (try
+    (assert-signature-valid-when-present encrypted-response idp-cert)
+    (catch Throwable e
+      (throw (ex-info "Invalid <Response> signature" {} e)))))
+
+(defmethod validate-response :require-signature
+  [_ encrypted-response decrypted-response _]
+  (when-not (signed? encrypted-response)
+    (let [assertions (opensaml-assertions decrypted-response)]
+      (assert (seq assertions) "Unsigned response has no assertions (no signatures can be verified)")
+      (assert (every? signed? assertions) "Neither response nor assertion(s) are signed"))))
+
+;;
+;; Subject Confirmation Data Checks
+;;
+
+(defn subject ^Subject [^Assertion assertion]
+  (some-> assertion .getSubject))
+
+(defn subject-confirmations [^Subject subject]
+  (some-> subject .getSubjectConfirmations))
+
+(defn subject-data ^SubjectConfirmationData [^SubjectConfirmation subject-confirmation]
+  (some-> subject-confirmation .getSubjectConfirmationData))
+
+(defn assertion->subject-confirmation-datas [assertion]
+  (map subject-data (-> assertion subject subject-confirmations)))
+
+(defmacro validate-confirmation-datas {:style/indent 1} [[data-binding assertion] & body]
+  `(doseq [data# (assertion->subject-confirmation-datas ~assertion)]
+     (let [~(vary-meta data-binding assoc :tag `SubjectConfirmationData) data#]
+       ~@body)))
+
+(defmulti validate-assertion
+  {:arglists '([validation response options])}
+  (fn [validation _ _]
+    (keyword validation)))
+
+(defmethod validate-assertion :signature
+  [_ assertion {:keys [idp-cert]}]
+  (try
+    (assert-signature-valid-when-present assertion idp-cert)
+    (catch Throwable e
+      (throw (ex-info "Invalid <Assertion> signature(s)" {} e)))))
+
+;; Verify that the `Recipient` attribute in any bearer `<SubjectConfirmationData>` matches the assertion consumer
+;; service URL to which the `<Response>` or artifact was delivered.
+(defmethod validate-assertion :recipient
+  [_ assertion {:keys [acs-url]}]
+  (when acs-url
+    (validate-confirmation-datas [data assertion]
+      (let [recipient (.getRecipient data)]
+        ;; Recipient field is REQUIRED if <SubjectConfirmationData> is present.
+        (when-not recipient
+          (throw (ex-info "<SubjectConfirmationData> does not contain a Recipient"
+                          {:data (coerce/->xml-string data)})))
+        (when-not (= recipient acs-url)
+          (throw (ex-info "<SubjectConfirmationData> Recipient does not match assertion consumer service URL"
+                          {:data (coerce/->xml-string data), :acs-url acs-url})))))))
+
+;; Verify that the NotOnOrAfter attribute in any bearer <SubjectConfirmationData> has not passed, subject to allowable
+;; clock skew between the providers
+(defmethod validate-assertion :not-on-or-after
+  [_ assertion {:keys [allowable-clock-skew-seconds]
+                :or   {allowable-clock-skew-seconds com.onelogin.saml2.util.Constants/ALOWED_CLOCK_DRIFT}}]
+  (validate-confirmation-datas [data assertion]
+    (let [not-on-or-after (some-> (.getNotOnOrAfter data) t/instant)]
+      (when-not not-on-or-after
+        (throw (ex-info "<SubjectConfirmationData> does not contain NotOnOrAfter"
+                        {:data (coerce/->xml-string data)})))
+      (when (t/after? (t/minus (t/instant) (t/seconds allowable-clock-skew-seconds))
+                      not-on-or-after)
+        (throw (ex-info "<SubjectConfirmationData> NotOnOrAfter has passed"
+                        {:data                         (coerce/->xml-string data)
+                         :not-on-or-after              not-on-or-after
+                         :now                          (t/instant)
+                         :allowable-clock-skew-seconds allowable-clock-skew-seconds}))))))
+
+(defmethod validate-assertion :not-before
+  [_ assertion {:keys [allowable-clock-skew-seconds]
+                :or   {allowable-clock-skew-seconds com.onelogin.saml2.util.Constants/ALOWED_CLOCK_DRIFT}}]
+  (validate-confirmation-datas [data assertion]
+    (when-let [not-before (some-> (.getNotBefore data) t/instant)]
+      (when (t/before? (t/plus (t/instant) (t/seconds allowable-clock-skew-seconds))
+                       not-before)
+        (throw (ex-info "<SubjectConfirmationData> NotBefore is in the future"
+                        {:data                         (coerce/->xml-string data)
+                         :not-before                   not-before
+                         :now                          (t/instant)
+                         :allowable-clock-skew-seconds allowable-clock-skew-seconds}))))))
+
+(defmethod validate-assertion :in-response-to
+  [_ assertion {:keys [request-id solicited?]
+                :or   {solicited? true}}]
+  (when (or request-id
+            (not solicited?))
+    (validate-confirmation-datas [data assertion]
+      (let [in-response-to (.getInResponseTo data)]
+        (when-not in-response-to
+          (throw (ex-info "<SubjectConfirmationData> does not contain InResponseTo"
+                          {:data (coerce/->xml-string data)})))
+        (if solicited?
+          (when (not= in-response-to request-id)
+            (throw (ex-info "<SubjectConfirmationData> InResponseTo does not match request-id"
+                            {:data       (coerce/->xml-string data)
+                             :request-id request-id})))
+          (when request-id
+            (throw (ex-info "<SubjectConfirmationData> InResponseTo should not be present for an unsolicited request"
+                            {:data       (coerce/->xml-string data)
+                             :request-id request-id}))))))))
+
+;; verifying the Address attribute is optional.
+(defmethod validate-assertion :address
+  [_ assertion {:keys [user-agent-address]}]
+  (when user-agent-address
+    (validate-confirmation-datas [data assertion]
+      (when-let [address (.getAddress data)]
+        (when-not (= address user-agent-address)
+          (throw (ex-info "<SubjectConfirmationData> Address does not match user-agent-address"
+                          {:data       (coerce/->xml-string data)
+                           :request-id user-agent-address})))))))
+
+(defn validate
+  [response idp-cert sp-private-key {:keys [response-validators
+                                            assertion-validators]
+                                     :or   {response-validators  [:signature
+                                                                  :require-signature]
+                                            assertion-validators [:signature
+                                                                  :recipient
+                                                                  :not-on-or-after
+                                                                  :not-before
+                                                                  :in-response-to
+                                                                  :address]}
+                                     :as   options}]
+  (when-let [response (coerce/->Response response)]
+    (let [decrypted-response (if sp-private-key
+                               (decrypt-response response sp-private-key)
+                               response)
+          options            (assoc options :idp-cert (coerce/->Credential idp-cert))]
+      (doseq [validator response-validators]
+        (validate-response validator response decrypted-response options))
+      (doseq [assertion (opensaml-assertions decrypted-response)
+              validator assertion-validators]
+        (validate-assertion validator assertion options)))
+    :valid))
+
+
+;;; +----------------------------------------------------------------------------------------------------------------+
+;;; |                                        Convenient Clojurey Map Util Fns                                        |
+;;; +----------------------------------------------------------------------------------------------------------------+
 
 (defn response-status
   "Parses and returns information about the status (i.e. successful or not), the version, addressing info etc. of the
@@ -30,7 +228,7 @@
        :status         status
        :success?       (= status org.opensaml.saml.saml2.core.StatusCode/SUCCESS)
        :version        (.. response getVersion toString)
-       :issue-instant  (c.coerce/to-timestamp (.getIssueInstant response))
+       :issue-instant  (t/instant (.getIssueInstant response))
        :destination    (.getDestination response)})))
 
 ;; https://www.purdue.edu/apps/account/docs/Shibboleth/Shibboleth_information.jsp
@@ -65,7 +263,7 @@
   (when assertion
     (let [statements                (.getAttributeStatements assertion)
           subject                   (.getSubject assertion)
-          subject-confirmation-data (.getSubjectConfirmationData ^SubjectConfirmation (first (.getSubjectConfirmations subject)))
+          subject-data (.getSubjectConfirmationData ^SubjectConfirmation (first (.getSubjectConfirmations subject)))
           name-id                   (.getNameID subject)
           attrs                     (into {} (for [^AttributeStatement statement statements
                                                    ^Attribute attribute          (.getAttributes statement)]
@@ -79,165 +277,14 @@
        :audiences    audiences
        :name-id      {:value  (some-> name-id .getValue)
                       :format (some-> name-id .getFormat)}
-       :confirmation {:in-response-to  (.getInResponseTo subject-confirmation-data)
-                      :not-before      (c.coerce/to-timestamp (.getNotBefore subject-confirmation-data))
-                      :not-on-or-after (c.coerce/to-timestamp (.getNotOnOrAfter subject-confirmation-data))
-                      :address         (.getAddress subject-confirmation-data)
-                      :recipient       (.getRecipient subject-confirmation-data)}})))
-
-(defn clone-response
-  "Clone an OpenSAML `response` object."
-  ^org.opensaml.saml.saml2.core.Response [^org.opensaml.saml.saml2.core.Response response]
-  (coerce/->Response (xml/clone-document (.. response getDOM getOwnerDocument))))
-
-(defn decrypt-response
-  ^org.opensaml.saml.saml2.core.Response [response sp-private-key]
-  ;; clone the response, otherwise decryption will be destructive.
-  (when-let [response (coerce/->Response response)]
-    (if (empty? (.getEncryptedAssertions response))
-      response
-      (let [clone   (clone-response response)
-            element (.getDOM clone)]
-        (crypto/recursive-decrypt! sp-private-key element)
-        (coerce/->Response element)))))
-
-(defn opensaml-assertions
-  [response sp-private-key]
-  (some-> response (decrypt-response sp-private-key) .getAssertions not-empty))
+       :confirmation {:in-response-to  (.getInResponseTo subject-data)
+                      :not-before      (t/instant (.getNotBefore subject-data))
+                      :not-on-or-after (t/instant (.getNotOnOrAfter subject-data))
+                      :address         (.getAddress subject-data)
+                      :recipient       (.getRecipient subject-data)}})))
 
 (defn assertions
   "Returns the assertions (encrypted or not) of a SAML Response object"
   [response sp-private-key]
   (when-let [assertions (opensaml-assertions response sp-private-key)]
     (map Assertion->map assertions)))
-
-(defn- signed? [object]
-  (when-let [object (coerce/->SAMLObject object)]
-    (.isSigned object)))
-
-(defn- signature [object]
-  (when-let [object (coerce/->SAMLObject object)]
-    (.getSignature object)))
-
-(defn- assert-signature-valid-when-present
-  [object credential]
-  (when-let [signature (signature object)]
-    (when-let [credential (coerce/->Credential credential)]
-      ;; validate that the signature conforms to the SAML signature spec
-      (.validate (org.opensaml.saml.security.impl.SAMLSignatureProfileValidator.) signature)
-      ;; validate that the signature matches the IdP cert
-      (org.opensaml.xmlsec.signature.support.SignatureValidator/validate signature credential)
-      :valid)))
-
-(defn assert-valid-signatures
-  "Check that `response` from the IdP is signed somewhere (either the entire response, or *all* of the assertion(s)),
-  and that signatures match the IdP's certificate. Our private key, `sp-private-key`, is used to decrypt assertions if
-  needed to verify their signatures. `idp-cert` and `sp-private-key` are anything that can be coerced to a
-  `Credential`, such as an instance of `X509Certificate`, or a details map to fetch it from a keystore -- see
-  `saml20-clj.coerce/->Credential` for all valid options). "
-  [response idp-cert sp-private-key]
-  (when-let [response (coerce/->Response response)]
-    (when-let [idp-cert (coerce/->Credential idp-cert)]
-      (let [assertions (opensaml-assertions response sp-private-key)]
-        (when-not (signed? response)
-          (assert (seq assertions) "Unsigned response has no assertions (no signatures can be verified)")
-          (assert (every? signed? assertions) "Neither response nor assertion(s) are signed"))
-        (try
-          (assert-signature-valid-when-present response idp-cert)
-          (catch Throwable e
-            (throw (ex-info "Invalid <Response> signature" {} e))))
-        (try
-          (doseq [assertion assertions]
-            (assert-signature-valid-when-present assertion idp-cert))
-          (catch Throwable e
-            (throw (ex-info "Invalid <Assertion> signature(s)" {} e))))
-        :valid))))
-
-;;
-;; Subject Confirmation Data Checks
-;;
-
-(defn- assert-valid-recipient-attribute
-  "Verify that the Recipient attribute in any bearer <SubjectConfirmationData> matches the
-  assertion consumer service URL to which the <Response> or artifact was delivered"
-  [^Assertion assertion acs-url]
-  (let [assertion-map (Assertion->map assertion)
-        recipient (-> assertion-map :confirmation :recipient)]
-    (= recipient acs-url))) ; Recipient field is REQUIRED
-
-(defn- assert-valid-not-on-or-after-attribute
-  "Verify that the NotOnOrAfter attribute in any bearer <SubjectConfirmationData> has not
-  passed, subject to allowable clock skew between the providers
-
-  TODO does not include allowable clock skew"
-  [^Assertion assertion]
-  (let [assertion-map (Assertion->map assertion)]
-    (if-let [not-on-or-after (-> assertion-map :confirmation :not-on-or-after)]
-      (t/before? (t/now) (c.coerce/from-sql-time not-on-or-after))
-      true))) ;; An assertion without a `not-on-or-after` field is still valid
-
-(defn- assert-valid-not-before-attribute
-  "TODO does not include allowable clock skew"
-  [^Assertion assertion]
-  (let [assertion-map (Assertion->map assertion)]
-    (if-let [not-before (-> assertion-map :confirmation :not-before)]
-      (not (t/before? (t/now) (c.coerce/from-sql-time not-before)))
-      true))) ;; An assertion without a `not-on-or-after` field is still valid
-
-(defn- assert-valid-in-response-to-attribute
-  "Verify that the InResponseTo attribute in the bearer <SubjectConfirmationData> equals the ID
-  of its original <AuthnRequest> message, unless the response is unsolicited (see Section 4.1.5 ), in
-  which case the attribute MUST NOT be present"
-  [^Assertion assertion auth-req-id solicited]
-  (let [assertion-map  (Assertion->map assertion)
-        in-response-to (-> assertion-map :confirmation :in-response-to)]
-    (if (and (not solicited) in-response-to)
-      false
-      (= (-> assertion-map :confirmation :in-response-to) ; This field is required
-         auth-req-id))))
-
-(defn- assert-valid-address-attribute
-  "If any bearer <SubjectConfirmationData> includes an Address attribute, the service provider
-  MAY check the user agent's client address against it.
-
-  NOTE The usage of this function is not super obvious, since verifying the
-  Address attribute is optional. So this function should only be called
-  if the SP is enforcing address checks, indicated either by a config
-  map or by exposing this at the API level
-  "
-  [^Assertion assertion user-agent-address]
-  (let [assertion-map (Assertion->map assertion)
-        address       (-> assertion-map :confirmation :address)]
-    (if address
-      (and address (= address user-agent-address))
-      true))) ; Address attribute may not be included, which is still valid
-
-(defn validate [response idp-cert-str]
-  "From the SAML spec: https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf
-
-  Regardless of the SAML binding used, the service provider MUST do the following:
-
-  • Verify any signatures present on the assertion(s) or the response
-
-  • Verify that the Recipient attribute in any bearer <SubjectConfirmationData> matches the
-  assertion consumer service URL to which the <Response> or artifact was delivered
-
-  • Verify that the NotOnOrAfter attribute in any bearer <SubjectConfirmationData> has not
-  passed, subject to allowable clock skew between the providers
-
-  • Verify that the InResponseTo attribute in the bearer <SubjectConfirmationData> equals the ID
-  of its original <AuthnRequest> message, unless the response is unsolicited (see Section 4.1.5 ), in
-  which case the attribute MUST NOT be present
-
-  • Verify that any assertions relied upon are valid in other respects
-
-  • If any bearer <SubjectConfirmationData> includes an Address attribute, the service provider
-  MAY check the user agent's client address against it.
-
-  • Any assertion which is not valid, or whose subject confirmation requirements cannot be met SHOULD
-  be discarded and SHOULD NOT be used to establish a security context for the principal.
-
-  • If an <AuthnStatement> used to establish a security context for the principal contains a
-  SessionNotOnOrAfter attribute, the security context SHOULD be discarded once this time is
-  reached, unless the service provider reestablishes the principal's identity by repeating the use of this
-  profile.")
