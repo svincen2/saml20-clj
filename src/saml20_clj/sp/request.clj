@@ -1,6 +1,5 @@
 (ns saml20-clj.sp.request
   (:require [clojure.string :as str]
-            [hiccup.core :as hiccup]
             [java-time :as t]
             [ring.util.codec :as codec]
             [saml20-clj
@@ -36,7 +35,7 @@
   (assert acs-url)
   (assert idp-url)
   (assert sp-name)
-  (let [request (coerce/->Element (hiccup/html
+  (let [request (coerce/->Element (coerce/->xml-string
                                    [:samlp:AuthnRequest
                                     {:xmlns:samlp                 "urn:oasis:names:tc:SAML:2.0:protocol"
                                      :ID                          request-id
@@ -54,8 +53,10 @@
                                     ]))]
     (when state-manager
       (state/record-request! state-manager (.getAttribute request "ID")))
-    (cond-> request
-      credential (crypto/sign credential))))
+    (if-not credential
+      request
+      (or (crypto/sign request credential)
+          (throw (ex-info "Failed to sign request" {:request request}))))))
 
 (defn uri-query-str
   ^String [clean-hash]
@@ -64,6 +65,7 @@
 (defn idp-redirect-response
   "Return Ring response for HTTP 302 redirect."
   [saml-request idp-url relay-state]
+  {:pre [(some? saml-request) (string? idp-url) (string? relay-state)]}
   (let [saml-request-str (if (string? saml-request)
                            saml-request
                            (coerce/->xml-string saml-request))
