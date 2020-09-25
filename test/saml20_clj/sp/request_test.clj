@@ -97,7 +97,7 @@
                 (map str/trim)
                 (filter seq)))))
 
-  (testing "should be able to create a signed request (with signature)"
+  (testing "should be able to create a signed request (with KeyInfo)"
     (is (= [(str "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
                  "<samlp:AuthnRequest xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\""
                  " AssertionConsumerServiceURL=\"http://sp.example.com/demo1/index.php?acs\""
@@ -150,7 +150,7 @@
                     :acs-url     "http://sp.example.com/demo1/index.php?acs"
                     :idp-url     "http://idp.example.com/SSOService.php"
                     :issuer      "http://sp.example.com/demo1/metadata.php"
-                    :private-key [test/sp-cert test/sp-private-key]}))
+                    :credential  [test/sp-cert test/sp-private-key]}))
                 coerce/->xml-string
                 str/split-lines
                 ;; for some reason it indents the XML differently on the REPL and in the tests
