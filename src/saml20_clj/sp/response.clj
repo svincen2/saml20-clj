@@ -5,6 +5,7 @@
             [saml20-clj
              [coerce :as coerce]
              [crypto :as crypto]
+             [state :as state]
              [xml :as xml]])
   (:import [org.opensaml.saml.saml2.core Assertion Attribute AttributeStatement Audience AudienceRestriction Response
             Subject SubjectConfirmation SubjectConfirmationData]))
@@ -15,6 +16,8 @@
   (coerce/->Response (xml/clone-document (.. response getDOM getOwnerDocument))))
 
 (defn decrypt-response
+  "Decrypt `response` using `sp-private-key` if it has encrypted Assertions. If it does not have encrypted assertions,
+  return `response` as-is."
   ^Response [response sp-private-key]
   ;; clone the response, otherwise decryption will be destructive.
   (when-let [response (coerce/->Response response)]
@@ -32,7 +35,8 @@
     (not-empty (.getAssertions response))))
 
 (defmulti validate-response
-  {:arglists '([validation encrypted-response unencryped-response options])}
+  "Perform a validation operation on a Response."
+  {:arglists '([validation possibly-encrypted-response unencryped-response options])}
   (fn [validation _ _ _]
     (keyword validation)))
 
@@ -49,6 +53,14 @@
     (let [assertions (opensaml-assertions decrypted-response)]
       (assert (seq assertions) "Unsigned response has no assertions (no signatures can be verified)")
       (assert (every? crypto/signed? assertions) "Neither response nor assertion(s) are signed"))))
+
+(defmethod validate-response :valid-request-id
+  [_ _ ^Response decrypted-response {:keys [state-manager]}]
+  (when state-manager
+    (let [request-id (.getInResponseTo decrypted-response)]
+      (when-not request-id
+        (throw (ex-info "<Response> is missing InResponseTo attribute" {})))
+      (state/accept-response! state-manager request-id))))
 
 ;;
 ;; Subject Confirmation Data Checks
@@ -72,6 +84,7 @@
        ~@body)))
 
 (defmulti validate-assertion
+  "Perform a validation operation on an Assertion."
   {:arglists '([validation response options])}
   (fn [validation _ _]
     (keyword validation)))
@@ -160,30 +173,35 @@
                           {:data       (coerce/->xml-string data)
                            :request-id user-agent-address})))))))
 
+(def default-validation-options
+  {:response-validators  [:signature
+                          :require-signature
+                          :valid-request-id]
+   :assertion-validators [:signature
+                          :recipient
+                          :not-on-or-after
+                          :not-before
+                          :in-response-to
+                          :address]})
+
 (defn validate
   "Validate response. Returns decrypted response if valid."
-  [response idp-cert sp-private-key {:keys [response-validators
-                                            assertion-validators]
-                                     :or   {response-validators  [:signature
-                                                                  :require-signature]
-                                            assertion-validators [:signature
-                                                                  :recipient
-                                                                  :not-on-or-after
-                                                                  :not-before
-                                                                  :in-response-to
-                                                                  :address]}
-                                     :as   options}]
-  (when-let [response (coerce/->Response response)]
-    (let [decrypted-response (if sp-private-key
-                               (decrypt-response response sp-private-key)
-                               response)
-          options            (assoc options :idp-cert (coerce/->Credential idp-cert))]
-      (doseq [validator response-validators]
-        (validate-response validator response decrypted-response options))
-      (doseq [assertion (opensaml-assertions decrypted-response)
-              validator assertion-validators]
-        (validate-assertion validator assertion options))
-      decrypted-response)))
+  ([response idp-cert sp-private-key]
+   (validate response idp-cert sp-private-key nil))
+
+  ([response idp-cert sp-private-key options]
+   (let [{:keys [response-validators assertion-validators], :as options} (-> (merge default-validation-options options)
+                                                                             (assoc :idp-cert (coerce/->Credential idp-cert)))]
+     (when-let [response (coerce/->Response response)]
+       (let [decrypted-response (if sp-private-key
+                                  (decrypt-response response sp-private-key)
+                                  response)]
+         (doseq [validator response-validators]
+           (validate-response validator response decrypted-response options))
+         (doseq [assertion (opensaml-assertions decrypted-response)
+                 validator assertion-validators]
+           (validate-assertion validator assertion options))
+         decrypted-response)))))
 
 
 ;;; +----------------------------------------------------------------------------------------------------------------+
@@ -261,6 +279,9 @@
 
 (defn assertions
   "Returns the assertions (encrypted or not) of a SAML Response object"
-  [response sp-private-key]
-  (when-let [assertions (opensaml-assertions response sp-private-key)]
-    (map Assertion->map assertions)))
+  ([possibly-encrypted-response sp-private-key]
+   (assertions (decrypt-response possibly-encrypted-response sp-private-key)))
+
+  ([decrypted-response]
+   (when-let [assertions (opensaml-assertions decrypted-response)]
+     (map Assertion->map assertions))))
