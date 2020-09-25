@@ -32,6 +32,7 @@ Basic usage for requests to the IdP looks like:
       :acs-url          "http://sp.example.com/demo1/index.php?acs"
       :idp-url          "http://idp.example.com/SSOService.php"
       :issuer           "http://sp.example.com/demo1/metadata.php"
+      ;; :private-key is optional. If passed, sign the request with this key
       :private-key      test/sp-private-key})
     ;; create a Ring redirect response to the IDP URL; pass the request as base-64 encoded `SAMLRequest` query parameter
     (saml/idp-redirect-response "http://idp.example.com/SSOService.php"
