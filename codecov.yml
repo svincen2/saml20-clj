@@ -7,10 +7,10 @@ coverage:
     project:
       default:
         # Project must always have at least this much coverage (by line)
-        target: 70%
+        target: 65%
         # Whole-project test coverage is allowed to drop up to 1%. (For situtations where we delete code with full coverage)
         threshold: 1%
     patch:
       default:
         # Changes must have at least 75% test coverage (by line)
-        target: 66%
+        target: 70%
