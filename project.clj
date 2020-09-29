@@ -1,4 +1,4 @@
-(defproject metabase/saml20-clj "2.0.0-alpha1"
+(defproject metabase/saml20-clj "2.0.0-alpha2-SNAPSHOT"
   :description "Improved SAML 2.0 library for SSO."
   :url "https://github.com/metabase/saml20-clj"
   :min-lein-version "2.5.0"
@@ -64,6 +64,9 @@
      [:deprecations
       :unused-ret-vals
       :implicit-dependencies]}}
+
+   :reflection-warnings
+   {:global-vars {*warn-on-reflection* true}}
 
    :bikeshed
    {:plugins
