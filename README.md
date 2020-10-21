@@ -105,6 +105,8 @@ Basic usage for responses from the IdP looks like this (assuming a Ring `request
     saml/assertions)
 ```
 
+#### `validate` options
+
 `validate` accepts an options map that allows you to configure what validations are done, as well as the
 stateful parameters (if relevent) those validations are verified against. The list of options and their defaults are
 shown below:
@@ -154,58 +156,66 @@ shown below:
 
  ;; :response-validators are validation functions that run once for the entire Response. They are defined as
  ;; implementations of the saml20-clj.sp.response/validate-response multimethod.
- :response-validators
- ;; The default Response validators are:
+ :response-validators (see below)
 
- [;; If the <Response> itself is signed, verifies that this signature is matches the Response itself and matches the
-  ;; IdP certificate. If Response is not signed, this validator does nothing.
-  :signature
-
-  ;; requires that either the <Response> is signed, *every* <Assertion> is signed.
-  :require-signature
-
-  ;; If the :issuer option is passed and <Response> has <Issuer> information, checks that these match.
-  :issuer
-
-  ;; validates the request ID with :state-manager if it is passed as an option. This does not validate that the value
-  ;; matches InResponseTo -- that is done by :in-response-to.
-  :valid-request-id]
 
  ;; :assertion validators are validation functions that run against every Assertion in the response. They are defined
  ;; as implementations of saml20-clj.sp.response/validate-assertion.
- :assertion-validators
+ :assertion-validators (see below)
+}
+```
 
- ;; The available Assertion validators are:
- [;; If <Assertion> is signed, the signature matches the Assertion and the IdP certificate. If <Assertion> is not
-  ;; signed, this validator does nothing.
-  :signature
+#### Default `:response-validators`
+
+```clj
+[;; If the <Response> itself is signed, verifies that this signature is matches the Response itself and matches the
+ ;; IdP certificate. If Response is not signed, this validator does nothing.
+ :signature
+
+ ;; requires that either the <Response> is signed, *every* <Assertion> is signed.
+ :require-signature
+
+ ;; If the :issuer option is passed and <Response> has <Issuer> information, checks that these match.
+ :issuer
+
+ ;; validates the request ID with :state-manager if it is passed as an option. This does not validate that the value
+ ;; matches InResponseTo -- that is done by :in-response-to.
+ :valid-request-id]
+```
+
+#### Default `:assertion-validators`
+
+```clj
+[;; If <Assertion> is signed, the signature matches the Assertion and the IdP certificate. If <Assertion> is not
+ ;; signed, this validator does nothing.
+ :signature
  
-  ;; If set, validation will ensure that all Assertions in the response are encrypted. If *any* unencrypted Assertions
-  ;; are present, verification will fail
-  :require-encryption
+ ;; If set, validation will ensure that all Assertions in the response are encrypted. If *any* unencrypted Assertions
+ ;; are present, verification will fail
+ :require-encryption
 
-  ;; If :acs-url is non-nil, and <SubjectConfirmationData> is present, checks that <SubjectConfirmationData> has a
-  ;; Recipient attribute matching this value.
-  :recipient
+ ;; If :acs-url is non-nil, and <SubjectConfirmationData> is present, checks that <SubjectConfirmationData> has a
+ ;; Recipient attribute matching this value.
+ :recipient
 
-  ;; If the :issuer option is passed, checks that Assertions have <Issuer> information and that it matches :issuer.
-  :issuer
+ ;; If the :issuer option is passed, checks that Assertions have <Issuer> information and that it matches :issuer.
+ :issuer
 
-  ;; If <SubjectConfirmationData> is present, has a NotOnOrAfter attribute, and its value is in the future,
-  ;; accounting for :allowable-clock-skew-seconds
-  :not-on-or-after
+ ;; If <SubjectConfirmationData> is present, has a NotOnOrAfter attribute, and its value is in the future,
+ ;; accounting for :allowable-clock-skew-seconds
+ :not-on-or-after
 
-  ;; If <SubjectConfirmationData> has a NotBefore attribute, checks that this value is in the past, accounting for
-  ;; :allowable-clock-skew-seconds
-  :not-before
+ ;; If <SubjectConfirmationData> has a NotBefore attribute, checks that this value is in the past, accounting for
+ ;; :allowable-clock-skew-seconds
+ :not-before
 
-  ;; If :request-id is non-nil and <SubjectConfirmationData> is present, checks that <SubjectConfirmationData> has an
-  ;; InResponseTo attribute matching :request-id.
-  :in-response-to
+ ;; If :request-id is non-nil and <SubjectConfirmationData> is present, checks that <SubjectConfirmationData> has an
+ ;; InResponseTo attribute matching :request-id.
+ :in-response-to
 
-  ;; If :user-agent-address is non-nil and <SubjectConfirmationData> has an Address attribute, checks that Address
-  ;; matches this value.
-  :address]}
+ ;; If :user-agent-address is non-nil and <SubjectConfirmationData> has an Address attribute, checks that Address
+ ;; matches this value.
+ :address]
 ```
 
 ## Differences from the original `saml20-clj` library
