@@ -168,10 +168,14 @@ shown below:
  ;; as implementations of saml20-clj.sp.response/validate-assertion.
  :assertion-validators
 
- ;; The default Assertion validators are:
+ ;; The available Assertion validators are:
  [;; If <Assertion> is signed, the signature matches the Assertion and the IdP certificate. If <Assertion> is not
   ;; signed, this validator does nothing.
   :signature
+ 
+  ;; If set, validation will ensure that all Assertions in the response are encrypted. If *any* unencrypted Assertions
+  ;; are present, verification will fail
+  :require-encryption
 
   ;; If :acs-url is non-nil, and <SubjectConfirmationData> is present, checks that <SubjectConfirmationData> has a
   ;; Recipient attribute matching this value.
