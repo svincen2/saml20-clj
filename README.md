@@ -240,6 +240,6 @@ This repository is forked from [vlacs/saml20-clj](https://github.com/vlacs/saml2
 
 * Copyright © 2013 VLACS <jdoane@vlacs.org>
 * Copyright © 2017 Kenji Nakamura <kenji@signifier.jp>
-* Copyright © 2019-2020 [Metabase, Inc.](https://metabase.com)
+* Copyright © 2019-2022 [Metabase, Inc.](https://metabase.com)
 
 Distributed under the Eclipse Public License, the same as Clojure.
