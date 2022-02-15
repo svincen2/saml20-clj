@@ -3,7 +3,7 @@
 [![Downloads](https://versions.deps.co/metabase/saml20-clj/downloads.svg)](https://versions.deps.co/metabase/saml20-clj)
 ![Linters](https://github.com/metabase/saml20-clj/actions/workflows/linters.yml/badge.svg)
 ![Tests](https://github.com/metabase/saml20-clj/actions/workflows/tests.yml/badge.svg)
-![Deploy](https://github.com/metabase/saml20-clj/actions/workflows/deploy.yml/badge.svg)
+![Release](https://github.com/metabase/saml20-clj/actions/workflows/deploy.yml/release.svg)
 [![codecov](https://codecov.io/gh/metabase/saml20-clj/branch/master/graph/badge.svg)](https://codecov.io/gh/metabase/saml20-clj)
 [![License](https://img.shields.io/badge/license-Eclipse%20Public%20License-blue.svg)](https://raw.githubusercontent.com/metabase/saml20-clj/master/LICENSE)
 [![cljdoc badge](https://cljdoc.org/badge/metabase/saml20-clj)](https://cljdoc.org/d/metabase/saml20-clj/CURRENT)
