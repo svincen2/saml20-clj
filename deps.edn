@@ -85,7 +85,10 @@
                                    "\\.el$"
                                    "\\.xml$"]}}
 
-  ;; clojure -X:jar :version "<version>"
+  :include-license
+  {:extra-paths ["license"]}
+
+  ;; clojure -X:jar :version "\"$(cat VERSION.txt)\""
   :jar
   {:replace-deps {com.github.seancorfield/depstar {:mvn/version "2.1.303"}}
    :exec-fn      hf.depstar/jar
@@ -93,7 +96,8 @@
                   :artifact-id "saml20-clj"
                   :jar         "target/saml20-clj.jar"
                   :sync-pom    true
-                  :paths-only  true}}
+                  :paths-only  true
+                  :aliases     [:include-license]}}
 
   ;; clojure -X:deploy :artifact '"target/saml20-clj.jar"'
   :deploy
