@@ -358,11 +358,12 @@
           subject      (.getSubject assertion)
           subject-data (.getSubjectConfirmationData ^SubjectConfirmation (first (.getSubjectConfirmations subject)))
           name-id      (.getNameID subject)
-          attrs        (into {} (for [^AttributeStatement statement statements
-                                      ^Attribute attribute          (.getAttributes statement)]
-                                               [(saml2-attr->name (.getName attribute)) ; Or (.getFriendlyName a) ??
-                                                (map #(-> ^org.opensaml.core.xml.XMLObject % .getDOM .getTextContent)
-                                                     (.getAttributeValues attribute))]))
+          attrs        (->> (for [^AttributeStatement statement statements
+                                  ^Attribute attribute          (.getAttributes statement)]
+                              {(saml2-attr->name (.getName attribute)) ; Or (.getFriendlyName a) ??
+                               (map #(-> ^org.opensaml.core.xml.XMLObject % .getDOM .getTextContent)
+                                    (.getAttributeValues attribute))})
+                            (apply (partial merge-with concat)))
           audiences    (for [^AudienceRestriction restriction (.. assertion getConditions getAudienceRestrictions)
                              ^Audience audience               (.getAudiences restriction)]
                                       (.getAudienceURI audience))]
