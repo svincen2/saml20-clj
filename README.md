@@ -235,7 +235,7 @@ shown below:
 This repository is forked from [vlacs/saml20-clj](https://github.com/vlacs/saml20-clj), and at this point is more or less a complete re-write.
 
 *  Other improvements:
-   *  Uses OpenSAML v3 instead of OpenSAML v2 which was EOL'ed in 2016
+   *  Uses OpenSAML v4 instead of OpenSAML v2 which was EOL'ed in 2016
    *  Tons of bug fixes, such as `saml20-clj.shared/base64->inflate->str` not actually calling `byte-inflate` at all
    *  Fixed millions of reflection warnings
    *  Removed duplicate functions
