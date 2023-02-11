@@ -12,15 +12,26 @@
 
 
 This is a SAML 2.0 Clojure library for SSO acting as a fairly thin wrapper around the Java libraries [OpenSAML
-v3](https://wiki.shibboleth.net/confluence/display/OS30/Home) and some utility functions from [OneLogin's SAML
+v4](https://wiki.shibboleth.net/confluence/display/OS30/Home) and some utility functions from [OneLogin's SAML
 library](https://github.com/onelogin/java-saml) This library allows a Clojure application to act as a Service Provider
 (SP).
+
+### Important note!
+
+The underlying Java library, OpenSAML, is no longer available in Maven Central, so you'll have to add the repository
+yourself. `deps.edn` example:
+
+```clj
+{:mvn/repos
+ {"opensaml"{:url "https://build.shibboleth.net/nexus/content/repositories/releases/"}}}
+ ```
 
 ## 2.0.0 Usage
 
 ### Creating metadata
 
-In order for an identityprovider to understand you as a service-provider, you need to provide metadata about your service. This is done in the following manner:
+In order for an identityprovider to understand you as a service-provider, you need to provide metadata about your
+service. This is done in the following manner:
 
 ```clojure
 (in-ns my-saml.core
