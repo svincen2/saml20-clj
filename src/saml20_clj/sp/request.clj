@@ -32,7 +32,9 @@
                                 state-manager
                                 ;; If present, we can sign the request
                                 credential
-                                instant]
+                                instant
+                                ;; NameIDPolicy format
+                                saml-format]
                          :or   {request-id (str "id" (java.util.UUID/randomUUID))
                                 instant (t/instant)}}]
   (assert (non-blank-string? acs-url) "acs-url is required")
@@ -53,7 +55,7 @@
                                     [:saml:Issuer
                                      {:xmlns:saml "urn:oasis:names:tc:SAML:2.0:assertion"}
                                      issuer]
-                                    ;;[:samlp:NameIDPolicy {:AllowCreate false :Format saml-format}]
+                                    [:samlp:NameIDPolicy {:AllowCreate false :Format saml-format}]
                                     ]))]
     (when state-manager
       (state/record-request! state-manager (.getAttribute request "ID")))
